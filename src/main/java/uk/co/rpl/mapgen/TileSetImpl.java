@@ -5,11 +5,15 @@
  */
 package uk.co.rpl.mapgen;
 
+import org.slf4j.Logger;
+import static org.slf4j.LoggerFactory.getLogger;
+
 /**
  *
  * @author philip
  */
 public class TileSetImpl  implements TileSet{
+    private static final Logger LOG = getLogger(TileSetImpl.class);
     // meters per pixel
     private final XYD scale;
     // size of a tile in pixels
@@ -44,18 +48,18 @@ public class TileSetImpl  implements TileSet{
         pixels = pixelSize;
     }
 
-    public TileSetImpl(XYD scale, XY tileSize, XYD baseEastWest, XYD eastWest,
-                       Tile[][] tiles, XY tile0, XY noTiles, 
+    public TileSetImpl(XYD scale, XY tileSize, XYD baseEastWest, 
+                       Tile[][] tiles, XY tile0, 
                        XY pixel0, XY pixels) {
         this.scale = scale;
         this.tileSize = tileSize;
         this.tiles = tiles;
         this.tile0 = tile0;
-        this.noTiles = noTiles;
+        this.noTiles = new XY(tiles[0].length, tiles.length);
         this.pixel0 = pixel0;
         this.pixels = pixels;
         this.baseEastWest=baseEastWest;
-        this.eastWest=eastWest;
+        eastWest=baseEastWest.add(pixel0.xyd().multiply(scale));
     }
 
     @Override
@@ -75,11 +79,12 @@ public class TileSetImpl  implements TileSet{
 
     @Override
     public Tile getTile(XY xy) {
-        if (xy.x>=noTiles.x || xy.y>noTiles.y)return null;
+        LOG.debug("tile  {}, size {}", xy, noTiles);
+        if (xy.x>noTiles.x || xy.y>noTiles.y)return null;
         XY tid = xy.add(tile0);
-        if (tid.x>=tiles.length) return null;
-        if (tid.y>=tiles[tid.x].length) return null;
-        return tiles[tid.x][tid.y];
+        if (tid.y>=tiles.length) return null;
+        if (tid.x>=tiles[tid.y].length) return null;
+        return tiles[tid.y][tid.x];
     }
 
     @Override
@@ -88,8 +93,22 @@ public class TileSetImpl  implements TileSet{
     }
 
     @Override
-    public XYD getEastWest() {
+    public XYD getEastNorth() {
         return eastWest;
+    }
+
+    @Override
+    public XY noTiles() {
+        return noTiles;
+    }
+
+    @Override
+    public String toString() {
+        return "TileSetImpl{" + "scale=" + scale + ", tileSize=" + tileSize +
+               ", tiles=" + tiles + ", baseEastWest=" + baseEastWest + 
+               ", eastWest=" + eastWest + ", tile0=" + tile0 + 
+               ", noTiles=" + noTiles + ", pixel0=" + pixel0 + 
+               ", pixels=" + pixels + '}';
     }
     
 }

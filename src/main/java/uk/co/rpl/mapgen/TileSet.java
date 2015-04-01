@@ -15,5 +15,7 @@ public interface TileSet {
     XY getPixelSize();
     Tile getTile(XY xy);
     Tile getTile(int x, int y);
-    XYD getEastWest();
+    XYD getEastNorth();
+
+    public XY noTiles();
 }
