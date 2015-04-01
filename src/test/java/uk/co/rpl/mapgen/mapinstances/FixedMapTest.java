@@ -6,13 +6,13 @@
 package uk.co.rpl.mapgen.mapinstances;
 
 import java.awt.image.BufferedImage;
-import java.io.File;
+import java.io.*;
+import javax.imageio.ImageIO;
+import javax.imageio.stream.ImageOutputStream;
 import org.apache.log4j.BasicConfigurator;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
-import static org.easymock.EasyMock.createMock;
-import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.replay;
+import static org.easymock.EasyMock.*;
 import org.junit.Test;
 import static org.junit.Assert.*;
 import org.junit.Before;
@@ -146,4 +146,30 @@ public class FixedMapTest {
             assertEquals(200, bi.getWidth());
         }
     }
+
+    @Test
+    public void testImage() throws TileException,
+                                   FileNotFoundException, 
+                                   IOException{
+        reset(config);
+        expect(config.get(BASE+".tile-dir")).andReturn("fixedMapTest");
+        expect(config.getXY(BASE+".width", BASE+".height", null)).
+                                andReturn(new XY(200, 200)).anyTimes();
+        expect(config.getXYD(BASE+".scale-x", BASE+".scale-y", null)).
+                                andReturn(new XYD(25.0, 25.0)).anyTimes();
+        expect(config.getXYD(BASE+".origin-x", BASE+".origin-y", null)).
+                                andReturn(new XYD(0, 1000)).anyTimes();
+        expect(config.get(BASE+".tile-filename")).andReturn(
+                                "MiniScale${y}x${x}.png").anyTimes();
+        replay(config);
+
+        inst = new FixedMap(config, BASE);
+
+        BufferedImage bi = inst.allTiles().getImage();
+        try(ImageOutputStream out  = ImageIO.createImageOutputStream(
+                                        new File("/tmp/fixedFullTest.png"))){
+            ImageIO.write(bi, "png", out);
+        }
+    }
+
 }

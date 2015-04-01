@@ -5,6 +5,8 @@
  */
 package uk.co.rpl.mapgen;
 
+import java.awt.image.BufferedImage;
+
 /**
  *
  * @author philip
@@ -17,5 +19,6 @@ public interface TileSet {
     Tile getTile(int x, int y);
     XYD getEastNorth();
 
-    public XY noTiles();
+    XY noTiles();
+    BufferedImage getImage();
 }

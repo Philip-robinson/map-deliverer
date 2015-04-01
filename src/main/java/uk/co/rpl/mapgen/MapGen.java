@@ -23,6 +23,7 @@ import java.util.function.DoubleSupplier;
  * @author philip
  */
 public class MapGen {
+    
     static final String mini="/home/philip/OS_Data/minisc_gb/data/"+
                              "RGB_TIF_COMPRESSED/DATA/"+
                              "MiniScale_(relief1)_R15.tif";

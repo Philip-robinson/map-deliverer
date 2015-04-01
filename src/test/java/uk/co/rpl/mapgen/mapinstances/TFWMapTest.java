@@ -1,11 +1,9 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
 package uk.co.rpl.mapgen.mapinstances;
 
-import java.io.File;
+import java.awt.image.BufferedImage;
+import java.io.*;
+import javax.imageio.ImageIO;
+import javax.imageio.stream.ImageOutputStream;
 import org.apache.log4j.BasicConfigurator;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
@@ -136,4 +134,20 @@ public class TFWMapTest {
         assertNull(ts.getTile(3, 2));
     }
     
+    @Test
+    public void testImage() throws TileException,
+                                   FileNotFoundException, 
+                                   IOException{
+        System.out.println("A");
+        BufferedImage bi = inst.allTiles().getImage();
+        System.out.println("B");
+        try(ImageOutputStream out  = ImageIO.createImageOutputStream(
+                                        new File("aaa.png"))){
+            System.out.println("C");
+            ImageIO.write(bi, "png", out);
+            System.out.println("D");
+        }
+        System.out.println("E");
+        
+    }
 }

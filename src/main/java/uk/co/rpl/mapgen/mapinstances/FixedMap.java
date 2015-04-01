@@ -139,7 +139,8 @@ public class FixedMap implements MapConfig{
         }
 
         return new TileSetImpl(tileScale(), tileSize(), tile0Origin(), tiles,
-            new XY(0,0), new XY(0,0), new XY(maxx+1, maxy+1).multiply(tileSize()));
+                               new XY(0,0), new XY(0,0),
+                               new XY(maxx+1, maxy+1).multiply(tileSize()));
     }
 
     public class FixedTile implements Tile{

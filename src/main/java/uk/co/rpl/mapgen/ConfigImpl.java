@@ -1,14 +1,11 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
 package uk.co.rpl.mapgen;
 
+import java.io.*;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Properties;
+import org.slf4j.Logger;
+import static org.slf4j.LoggerFactory.getLogger;
 import uk.co.rpl.mapgen.mapinstances.FixedMap;
 import uk.co.rpl.mapgen.mapinstances.TFWMap;
 
@@ -18,10 +15,32 @@ import uk.co.rpl.mapgen.mapinstances.TFWMap;
  */
 public class ConfigImpl implements Config{
 
-    Properties prop;
+    private static Logger LOG = getLogger(ConfigImpl.class);
+    private final Properties prop;
     private MapConfig[] maps;
     private final Object mapsLock = new Object();
 
+    public ConfigImpl(){
+        this.prop = new Properties();
+        try(InputStream is = getClass().getResourceAsStream(
+                                            "/config.properties")){
+            prop.load(is);
+            for (String fn: new String[]{
+                    "/etc/mapgen/mapgen.properties",
+                    "~/mapgen.properties",
+                    "mapgen.properties"}){
+                File f = new File(fn);
+                if (f.exists()){
+                   try(InputStream is2=new FileInputStream(f)){
+                       prop.load(is2);
+                   }
+                }
+            }
+        }catch(IOException e){
+            LOG.error(e.getMessage(), e);
+        }
+    }
+    
     @Override
     public String get(String name){
         return prop.getProperty(name);

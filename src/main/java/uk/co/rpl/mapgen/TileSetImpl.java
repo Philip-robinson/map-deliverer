@@ -5,8 +5,10 @@
  */
 package uk.co.rpl.mapgen;
 
+import java.awt.image.BufferedImage;
 import org.slf4j.Logger;
 import static org.slf4j.LoggerFactory.getLogger;
+import uk.co.rpl.mapgen.mapinstances.TileException;
 
 /**
  *
@@ -25,10 +27,8 @@ public class TileSetImpl  implements TileSet{
     private final XY tile0;
     // identify size of tile grid
     private final XY noTiles;
-
     // pixel origin of required rectangle within first tile
     private final XY pixel0;
-
     private final XY pixels;
 
     TileSetImpl(TileSetImpl origin, XY pixel0, XY pixelSize){
@@ -109,6 +109,27 @@ public class TileSetImpl  implements TileSet{
                ", eastWest=" + eastWest + ", tile0=" + tile0 + 
                ", noTiles=" + noTiles + ", pixel0=" + pixel0 + 
                ", pixels=" + pixels + '}';
+    }
+
+    @Override
+    public BufferedImage getImage() {
+        BufferedImage out = new BufferedImage(getPixelSize().x, 
+                                              getPixelSize().y, 
+                                              BufferedImage.TYPE_INT_BGR);
+        for (int x=0; x<noTiles().x; x++){
+            for (int y=0; y<noTiles().y; y++){
+                Tile t = getTile(x, y);
+                if (t!=null) try{
+                    out.getGraphics().drawImage(t.imageData(), 
+                                    tileSize.x*x, 
+                                    tileSize.y*y, 
+                                    null);
+                } catch (TileException ex) {
+                    LOG.error(ex.getMessage(), ex);
+                }
+            }
+        }
+        return out;
     }
     
 }
