@@ -131,5 +131,10 @@ public class TileSetImpl  implements TileSet{
         }
         return out;
     }
+
+    @Override
+    public TileSet sub(XY pixelSize, XYD scale, XYD offset) {
+        return new TileSetImpl(scale, tileSize, offset, tiles, tile0, pixel0, pixelSize)
+    }
     
 }

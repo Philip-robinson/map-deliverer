@@ -19,6 +19,8 @@ public interface TileSet {
     Tile getTile(int x, int y);
     XYD getEastNorth();
 
+    TileSet sub(XY pixelSize, XYD scale, XYD offset);
+
     XY noTiles();
     BufferedImage getImage();
 }

@@ -172,4 +172,29 @@ public class FixedMapTest {
         }
     }
 
+    @Test
+    public void testSubImage() throws TileException,
+                                   FileNotFoundException, 
+                                   IOException{
+        reset(config);
+        expect(config.get(BASE+".tile-dir")).andReturn("fixedMapTest");
+        expect(config.getXY(BASE+".width", BASE+".height", null)).
+                                andReturn(new XY(200, 200)).anyTimes();
+        expect(config.getXYD(BASE+".scale-x", BASE+".scale-y", null)).
+                                andReturn(new XYD(25.0, 25.0)).anyTimes();
+        expect(config.getXYD(BASE+".origin-x", BASE+".origin-y", null)).
+                                andReturn(new XYD(0, 1000)).anyTimes();
+        expect(config.get(BASE+".tile-filename")).andReturn(
+                                "MiniScale${y}x${x}.png").anyTimes();
+        replay(config);
+
+        inst = new FixedMap(config, BASE);
+
+        BufferedImage bi = inst.allTiles().getImage();
+        try(ImageOutputStream out  = ImageIO.createImageOutputStream(
+                                        new File("/tmp/fixedFullPart.png"))){
+            ImageIO.write(bi, "png", out);
+        }
+    }
+
 }
