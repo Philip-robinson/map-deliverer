@@ -123,8 +123,8 @@ public class FixedMapTest {
         assertEquals(0, ts.getPixelOffset().y);
         assertEquals(19*TILE_WIDE, ts.getPixelSize().x);
         assertEquals(3*TILE_HIGH, ts.getPixelSize().y);
-        assertEquals(TILE_WIDE, ts.getTilesSize().x);
-        assertEquals(TILE_HIGH, ts.getTilesSize().y);
+        assertEquals(TILE_WIDE, ts.getTileSize().x);
+        assertEquals(TILE_HIGH, ts.getTileSize().y);
         assertEquals(EAST, ts.getEastNorth().x, 0.000001);
         assertEquals(NORTH, ts.getEastNorth().y, 0.000001);
 
@@ -165,9 +165,10 @@ public class FixedMapTest {
 
         inst = new FixedMap(config, BASE);
 
+        new File("/tmp/fixedMapTest/").mkdirs();
         BufferedImage bi = inst.allTiles().getImage();
         try(ImageOutputStream out  = ImageIO.createImageOutputStream(
-                                        new File("/tmp/fixedFullTest.png"))){
+                     new File("/tmp/fixedMapTest/testImage.png"))){
             ImageIO.write(bi, "png", out);
         }
     }
@@ -176,24 +177,233 @@ public class FixedMapTest {
     public void testSubImage() throws TileException,
                                    FileNotFoundException, 
                                    IOException{
+        double THIS_EAST=10;
+        double THIS_NORTH=1000;
+        double SCALE=25.0;
+        int TILE_SIZE=200;
+
+        double THIS_EAST_2=80010;
+        double THIS_NORTH_2=1000;
+        double SCALE_2=25.0;
         reset(config);
-        expect(config.get(BASE+".tile-dir")).andReturn("fixedMapTest");
+        expect(config.get(BASE+".tile-dir")).andReturn("fixedMapTest").anyTimes();
         expect(config.getXY(BASE+".width", BASE+".height", null)).
-                                andReturn(new XY(200, 200)).anyTimes();
+                                andReturn(new XY(TILE_SIZE, TILE_SIZE)).anyTimes();
         expect(config.getXYD(BASE+".scale-x", BASE+".scale-y", null)).
-                                andReturn(new XYD(25.0, 25.0)).anyTimes();
+                                andReturn(new XYD(SCALE, -SCALE)).anyTimes();
+        // get east north
         expect(config.getXYD(BASE+".origin-x", BASE+".origin-y", null)).
-                                andReturn(new XYD(0, 1000)).anyTimes();
+                                andReturn(new XYD(THIS_EAST, THIS_NORTH)).anyTimes();
         expect(config.get(BASE+".tile-filename")).andReturn(
                                 "MiniScale${y}x${x}.png").anyTimes();
         replay(config);
 
         inst = new FixedMap(config, BASE);
 
-        BufferedImage bi = inst.allTiles().getImage();
+        new File("/tmp/fixedMapTest/").mkdirs();
+        TileSet ts = inst.allTiles().sub(new XY(TILE_SIZE*3, TILE_SIZE*3),
+                                         new XYD(SCALE_2, -SCALE_2),
+                                         new XYD(THIS_EAST_2, THIS_NORTH_2));
+        assertEquals(THIS_EAST_2, ts.getEastNorth().x, 0.0001);
+        assertEquals(THIS_NORTH_2, ts.getEastNorth().y, 0.0001);
+        assertEquals(TILE_SIZE*3, ts.getPixelSize().x);
+        assertEquals(TILE_SIZE*3, ts.getPixelSize().y);
+        assertEquals(0,ts.getPixelOffset().x);
+        assertEquals(0,ts.getPixelOffset().y);
+        assertEquals(SCALE_2, ts.getScale().x, 0.0002);
+        assertEquals(-SCALE_2, ts.getScale().y, 0.0002);
+        BufferedImage bi2 = ts.getImage();
         try(ImageOutputStream out  = ImageIO.createImageOutputStream(
-                                        new File("/tmp/fixedFullPart.png"))){
-            ImageIO.write(bi, "png", out);
+                          new File("/tmp/fixedMapTest/testSubImage.png"))){
+            ImageIO.write(bi2, "png", out);
+        }
+    }
+
+
+    @Test
+    public void testSubImageScaled() throws TileException,
+                                   FileNotFoundException, 
+                                   IOException{
+        double THIS_EAST=10;
+        double THIS_NORTH=1000;
+        double SCALE=25.0;
+        int TILE_SIZE=200;
+
+        double THIS_EAST_2=80010;
+        double THIS_NORTH_2=1000;
+        double SCALE_2=50.0;
+        reset(config);
+        expect(config.get(BASE+".tile-dir")).andReturn("fixedMapTest").anyTimes();
+        expect(config.getXY(BASE+".width", BASE+".height", null)).
+                                andReturn(new XY(TILE_SIZE, TILE_SIZE)).anyTimes();
+        expect(config.getXYD(BASE+".scale-x", BASE+".scale-y", null)).
+                                andReturn(new XYD(SCALE, -SCALE)).anyTimes();
+        // get east north
+        expect(config.getXYD(BASE+".origin-x", BASE+".origin-y", null)).
+                                andReturn(new XYD(THIS_EAST, THIS_NORTH)).anyTimes();
+        expect(config.get(BASE+".tile-filename")).andReturn(
+                                "MiniScale${y}x${x}.png").anyTimes();
+        replay(config);
+
+        inst = new FixedMap(config, BASE);
+
+        new File("/tmp/fixedMapTest/").mkdirs();
+        TileSet ts = inst.allTiles().sub(new XY(TILE_SIZE*3, TILE_SIZE*3),
+                                         new XYD(SCALE_2, -SCALE_2),
+                                         new XYD(THIS_EAST_2, THIS_NORTH_2));
+        assertEquals(THIS_EAST_2, ts.getEastNorth().x, 0.0001);
+        assertEquals(THIS_NORTH_2, ts.getEastNorth().y, 0.0001);
+        assertEquals(TILE_SIZE*3, ts.getPixelSize().x);
+        assertEquals(TILE_SIZE*3, ts.getPixelSize().y);
+        assertEquals(0,ts.getPixelOffset().x);
+        assertEquals(0,ts.getPixelOffset().y);
+        assertEquals(SCALE_2, ts.getScale().x, 0.0002);
+        assertEquals(-SCALE_2, ts.getScale().y, 0.0002);
+        BufferedImage bi2 = ts.getImage();
+        try(ImageOutputStream out  = ImageIO.createImageOutputStream(
+                          new File("/tmp/fixedMapTest/testSubImageScaled.png"))){
+            ImageIO.write(bi2, "png", out);
+        }
+    }
+
+
+    @Test
+    public void testSubImageScaledDown() throws TileException,
+                                   FileNotFoundException, 
+                                   IOException{
+        double THIS_EAST=10;
+        double THIS_NORTH=1000;
+        double SCALE=25.0;
+        int TILE_SIZE=200;
+
+        double THIS_EAST_2=80010;
+        double THIS_NORTH_2=1000;
+        double SCALE_2=20.0;
+        reset(config);
+        expect(config.get(BASE+".tile-dir")).andReturn("fixedMapTest").anyTimes();
+        expect(config.getXY(BASE+".width", BASE+".height", null)).
+                                andReturn(new XY(TILE_SIZE, TILE_SIZE)).anyTimes();
+        expect(config.getXYD(BASE+".scale-x", BASE+".scale-y", null)).
+                                andReturn(new XYD(SCALE, -SCALE)).anyTimes();
+        // get east north
+        expect(config.getXYD(BASE+".origin-x", BASE+".origin-y", null)).
+                                andReturn(new XYD(THIS_EAST, THIS_NORTH)).anyTimes();
+        expect(config.get(BASE+".tile-filename")).andReturn(
+                                "MiniScale${y}x${x}.png").anyTimes();
+        replay(config);
+
+        inst = new FixedMap(config, BASE);
+
+        new File("/tmp/fixedMapTest/").mkdirs();
+        TileSet ts = inst.allTiles().sub(new XY(TILE_SIZE*3, TILE_SIZE*3),
+                                         new XYD(SCALE_2, -SCALE_2),
+                                         new XYD(THIS_EAST_2, THIS_NORTH_2));
+        assertEquals(THIS_EAST_2, ts.getEastNorth().x, 0.0001);
+        assertEquals(THIS_NORTH_2, ts.getEastNorth().y, 0.0001);
+        assertEquals(TILE_SIZE*3, ts.getPixelSize().x);
+        assertEquals(TILE_SIZE*3, ts.getPixelSize().y);
+        assertEquals(0,ts.getPixelOffset().x);
+        assertEquals(0,ts.getPixelOffset().y);
+        assertEquals(SCALE_2, ts.getScale().x, 0.0002);
+        assertEquals(-SCALE_2, ts.getScale().y, 0.0002);
+        BufferedImage bi2 = ts.getImage();
+        try(ImageOutputStream out  = ImageIO.createImageOutputStream(
+                          new File("/tmp/fixedMapTest/testSubImageScaledDown.png"))){
+            ImageIO.write(bi2, "png", out);
+        }
+    }
+
+
+    @Test
+    public void testSubImageScaledDownOffset() throws TileException,
+                                   FileNotFoundException, 
+                                   IOException{
+        double THIS_EAST=10;
+        double THIS_NORTH=1000;
+        double SCALE=25.0;
+        int TILE_SIZE=200;
+
+        double THIS_EAST_2=81010;
+        double THIS_NORTH_2=0000;
+        double SCALE_2=20.0;
+        reset(config);
+        expect(config.get(BASE+".tile-dir")).andReturn("fixedMapTest").anyTimes();
+        expect(config.getXY(BASE+".width", BASE+".height", null)).
+                                andReturn(new XY(TILE_SIZE, TILE_SIZE)).anyTimes();
+        expect(config.getXYD(BASE+".scale-x", BASE+".scale-y", null)).
+                                andReturn(new XYD(SCALE, -SCALE)).anyTimes();
+        // get east north
+        expect(config.getXYD(BASE+".origin-x", BASE+".origin-y", null)).
+                                andReturn(new XYD(THIS_EAST, THIS_NORTH)).anyTimes();
+        expect(config.get(BASE+".tile-filename")).andReturn(
+                                "MiniScale${y}x${x}.png").anyTimes();
+        replay(config);
+
+        inst = new FixedMap(config, BASE);
+
+        new File("/tmp/fixedMapTest/").mkdirs();
+        TileSet ts = inst.allTiles().sub(new XY(TILE_SIZE*3, TILE_SIZE*3),
+                                         new XYD(SCALE_2, -SCALE_2),
+                                         new XYD(THIS_EAST_2, THIS_NORTH_2));
+        assertEquals(THIS_EAST_2, ts.getEastNorth().x, 0.0001);
+        assertEquals(THIS_NORTH_2, ts.getEastNorth().y, 0.0001);
+        assertEquals(TILE_SIZE*3, ts.getPixelSize().x);
+        assertEquals(TILE_SIZE*3, ts.getPixelSize().y);
+        assertEquals(50,ts.getPixelOffset().x);
+        assertEquals(50,ts.getPixelOffset().y);
+        assertEquals(SCALE_2, ts.getScale().x, 0.0002);
+        assertEquals(-SCALE_2, ts.getScale().y, 0.0002);
+        BufferedImage bi2 = ts.getImage();
+        try(ImageOutputStream out  = ImageIO.createImageOutputStream(
+                          new File("/tmp/fixedMapTest/testSubImageScaledDownOffset.png"))){
+            ImageIO.write(bi2, "png", out);
+        }
+    }
+
+
+    @Test
+    public void testSubImageScaledDownOffset100x50() throws TileException,
+                                   FileNotFoundException, 
+                                   IOException{
+        double THIS_EAST=10;
+        double THIS_NORTH=1000;
+        double SCALE=25.0;
+        int TILE_SIZE=200;
+
+        double THIS_EAST_2=82010;
+        double THIS_NORTH_2= 0000;
+        double SCALE_2=10.0;
+        reset(config);
+        expect(config.get(BASE+".tile-dir")).andReturn("fixedMapTest").anyTimes();
+        expect(config.getXY(BASE+".width", BASE+".height", null)).
+                                andReturn(new XY(TILE_SIZE, TILE_SIZE)).anyTimes();
+        expect(config.getXYD(BASE+".scale-x", BASE+".scale-y", null)).
+                                andReturn(new XYD(SCALE, -SCALE)).anyTimes();
+        // get east north
+        expect(config.getXYD(BASE+".origin-x", BASE+".origin-y", null)).
+                                andReturn(new XYD(THIS_EAST, THIS_NORTH)).anyTimes();
+        expect(config.get(BASE+".tile-filename")).andReturn(
+                                "MiniScale${y}x${x}.png").anyTimes();
+        replay(config);
+
+        inst = new FixedMap(config, BASE);
+
+        new File("/tmp/fixedMapTest/").mkdirs();
+        TileSet ts = inst.allTiles().sub(new XY(TILE_SIZE*3, TILE_SIZE*3),
+                                         new XYD(SCALE_2, -SCALE_2),
+                                         new XYD(THIS_EAST_2, THIS_NORTH_2));
+        assertEquals(THIS_EAST_2, ts.getEastNorth().x, 0.0001);
+        assertEquals(THIS_NORTH_2, ts.getEastNorth().y, 0.0001);
+        assertEquals(TILE_SIZE*3, ts.getPixelSize().x);
+        assertEquals(TILE_SIZE*3, ts.getPixelSize().y);
+        assertEquals(200,ts.getPixelOffset().x);
+        assertEquals(100,ts.getPixelOffset().y);
+        assertEquals(SCALE_2, ts.getScale().x, 0.0002);
+        assertEquals(-SCALE_2, ts.getScale().y, 0.0002);
+        BufferedImage bi2 = ts.getImage();
+        try(ImageOutputStream out  = ImageIO.createImageOutputStream(
+                          new File("/tmp/fixedMapTest/testSubImageScaledDownOffset100x50.png"))){
+            ImageIO.write(bi2, "png", out);
         }
     }
 

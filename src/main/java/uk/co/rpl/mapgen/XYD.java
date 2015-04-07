@@ -33,10 +33,13 @@ public class XYD {
     public XYD multiply(double mul){
         return new XYD(x*mul, y*mul);
     }
-    public XYD multiply(XYD mul){
+    public XYD times(XYD mul){
         return new XYD(x*mul.x, y*mul.y);
     }
 
+    public XYD mul(XYD mul){
+        return new XYD(x*mul.x, y*mul.y);
+    }
     public XYD negate(){
         return new XYD(-x, -y);
     }
@@ -49,16 +52,20 @@ public class XYD {
         return new XYD(x+addx, y+addy);
     }
 
-    public XYD divide(XYD div) {
+    public XYD div(XYD div) {
         return new XYD(x/div.x, y/div.y);
     }
 
-    public XYD subtract(XYD sub) {
+    public XYD sub(XYD sub) {
         return new XYD(x-sub.x, y-sub.y);
     }
     
-    public XYD subtract(double sub) {
+    public XYD sub(double sub) {
         return new XYD(x-sub, y-sub);
+    }
+
+    public XY xy() {
+        return new XY((int)x, (int)y);
     }
 
     @Override
@@ -92,6 +99,14 @@ public class XYD {
             return false;
         }
         return true;
+    }
+
+    public XYD frac() {
+        return new XYD(x-Math.floor(x), y-Math.floor(y));
+    }
+
+    public XY ceil() {
+        return new XY((int)Math.ceil(x), (int)Math.ceil(y));
     }
     
 }

@@ -110,7 +110,7 @@ public class TFWMapTest {
         assertEquals(799987.5, ts.getEastNorth().y, 0.000001);
         assertEquals(new XY(0,0), ts.getPixelOffset());
         assertEquals(new XY(16000, 12000), ts.getPixelSize());
-        assertEquals(new XY(4000, 4000), ts.getTilesSize());
+        assertEquals(new XY(4000, 4000), ts.getTileSize());
         XY nt = ts.noTiles();
         for (int y=0; y<nt.y; y++) {
             for (int x=0; x<nt.x; x++){

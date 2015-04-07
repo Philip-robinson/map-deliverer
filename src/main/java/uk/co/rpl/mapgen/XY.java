@@ -10,6 +10,7 @@ package uk.co.rpl.mapgen;
  * @author philip
  */
 public class XY {
+    public static final XY ZERO=new XY(0,0);
     public final int x;
     public final int y;
 
@@ -26,14 +27,14 @@ public class XY {
         return y;
     }
 
-    public XY divide(int div){
+    public XY div(int div){
         return new XY(x/div, y/div);
     }
 
-    public XY multiply(int mul){
+    public XY mul(int mul){
         return new XY(x*mul, y*mul);
     }
-    public XY multiply(XY mul){
+    public XY mul(XY mul){
         return new XY(x*mul.x, y*mul.y);
     }
 
@@ -49,15 +50,15 @@ public class XY {
         return new XY(x+addx, y+addy);
     }
 
-    public XY divide(XY div) {
+    public XY div(XY div) {
         return new XY(x/div.x, y/div.y);
     }
 
-    public XY subtract(XY sub) {
+    public XY sub(XY sub) {
         return new XY(x-sub.x, y-sub.y);
     }
     
-    public XY subtract(int sub) {
+    public XY sub(int sub) {
         return new XY(x-sub, y-sub);
     }
     

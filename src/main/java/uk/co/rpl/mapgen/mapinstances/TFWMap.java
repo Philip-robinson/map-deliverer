@@ -24,7 +24,7 @@ import uk.co.rpl.mapgen.MapConfig;
 import static uk.co.rpl.mapgen.MapConfig.SCALE_TYPE.TFW;
 import uk.co.rpl.mapgen.Tile;
 import uk.co.rpl.mapgen.TileSet;
-import uk.co.rpl.mapgen.TileSetImpl;
+import uk.co.rpl.mapgen.BaseTileSetImpl;
 import uk.co.rpl.mapgen.XY;
 import uk.co.rpl.mapgen.XYD;
 
@@ -148,9 +148,8 @@ public class TFWMap implements MapConfig{
                 }
                 y+=1;
             }
-            return new TileSetImpl(scale, size, 
-                new XYD(xind.first(), grid.lastKey()), 
-                tiles,  new XY(0,0), new XY(0,0), tileCnt.multiply(size));
+            return new BaseTileSetImpl(scale, size, 
+                new XYD(xind.first(), grid.lastKey()), tiles);
         }else throw new TileException("no tiles");
     }
     

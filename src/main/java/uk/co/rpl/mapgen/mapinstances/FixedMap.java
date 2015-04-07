@@ -22,7 +22,7 @@ import uk.co.rpl.mapgen.MapConfig;
 import static uk.co.rpl.mapgen.MapConfig.SCALE_TYPE.FIXED;
 import uk.co.rpl.mapgen.Tile;
 import uk.co.rpl.mapgen.TileSet;
-import uk.co.rpl.mapgen.TileSetImpl;
+import uk.co.rpl.mapgen.BaseTileSetImpl;
 import uk.co.rpl.mapgen.XY;
 import uk.co.rpl.mapgen.XYD;
 
@@ -138,9 +138,7 @@ public class FixedMap implements MapConfig{
             }
         }
 
-        return new TileSetImpl(tileScale(), tileSize(), tile0Origin(), tiles,
-                               new XY(0,0), new XY(0,0),
-                               new XY(maxx+1, maxy+1).multiply(tileSize()));
+        return new BaseTileSetImpl(tileScale(), tileSize(), tile0Origin(), tiles);
     }
 
     public class FixedTile implements Tile{
@@ -171,7 +169,7 @@ public class FixedMap implements MapConfig{
 
         @Override
         public XYD origin() {
-            return pos.xyd().multiply(scale()).multiply(size().xyd()).
+            return pos.xyd().times(scale()).times(size().xyd()).
                 add(FixedMap.this.tile0Origin());
         }
 
