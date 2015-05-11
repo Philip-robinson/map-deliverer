@@ -68,6 +68,10 @@ public class XYD {
         return new XY((int)x, (int)y);
     }
 
+    public XY round() {
+        return new XY((int)(x+0.5), (int)(y+0.5));
+    }
+
     @Override
     public String toString() {
         return "XYD{" + "x=" + x + ", y=" + y + '}';
@@ -107,6 +111,10 @@ public class XYD {
 
     public XY ceil() {
         return new XY((int)Math.ceil(x), (int)Math.ceil(y));
+    }
+
+    public XY entier() {
+        return new XY((int)(x>0?Math.ceil(x):x), (int)(y>0?Math.ceil(y):y));
     }
     
 }

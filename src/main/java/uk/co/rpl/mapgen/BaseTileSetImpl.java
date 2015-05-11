@@ -33,12 +33,12 @@ public class BaseTileSetImpl  extends SubTileSupport{
     }
 
     @Override
-    public XY getTileSize() {
+    public XY getTileSizePx() {
         return tileSize;
     }
 
     @Override
-    public XY getPixelSize() {
+    public XY getTilesetSizePx() {
         return pixels;
     }
 
@@ -57,12 +57,12 @@ public class BaseTileSetImpl  extends SubTileSupport{
     }
 
     @Override
-    public XYD getEastNorth() {
+    public XYD getTilsetEastNorth() {
         return eastNorth;
     }
 
     @Override
-    public XY noTiles() {
+    public XY noTilesInTilset() {
         return noTiles;
     }
 
@@ -80,13 +80,18 @@ public class BaseTileSetImpl  extends SubTileSupport{
     }
 
     @Override
-    public XYD getScale() {
+    public XYD getScaleMpPx() {
         return scale;
     }
 
     @Override
-    public XY getPixelOffset() {
+    public XY getOffsetFromBasePx() {
         return XY.ZERO;
+    }
+
+    @Override
+    public XYD getTileSizeM() {
+        return getTileSizePx().xyd().mul(getScaleMpPx());
     }
     
 }

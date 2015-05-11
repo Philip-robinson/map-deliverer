@@ -19,19 +19,41 @@ public abstract class SubTileSupport implements TileSet{
 
     @Override
     public BufferedImage getImage() {
-            BufferedImage out = new BufferedImage(getPixelSize().x, 
-                                              getPixelSize().y, 
-                                              BufferedImage.TYPE_INT_BGR);
-        for (int x=0; x<noTiles().x; x++){
-            for (int y=0; y<noTiles().y; y++){
+        LOG.trace("getImage");
+        BufferedImage out = new BufferedImage(getTilesetSizePx().x, 
+                                              getTilesetSizePx().y, 
+                                              BufferedImage.TYPE_INT_RGB);
+        LOG.debug("Created image {}x{}", getTilesetSizePx().x, getTilesetSizePx().y);
+        for (int x=0; x<noTilesInTilset().x; x++){
+            for (int y=0; y<noTilesInTilset().y; y++){
                 Tile t = getTile(x, y);
-                if (t!=null) try{
-                    out.getGraphics().drawImage(t.imageData(), 
-                                    getTileSize().x*x, 
-                                    getTileSize().y*y, 
+                if (t!=null){
+                    try{
+                        final XYD en = getTilsetEastNorth();
+                        final XYD or = t.origin();
+                        final XYD sc = getScaleMpPx();
+                        final XYD om = or.sub(en);
+                        final XYD op = om.div(sc);
+                        final XY point =op.ceil();
+                        if (LOG.isDebugEnabled()){
+                            LOG.debug("Image origin  = {}", en);
+                            LOG.debug("Tile origin   = {}", or);
+                            LOG.debug("Offset meters = {}", om);
+                            LOG.debug("Scale         = {}", sc);
+                            LOG.debug("Offset pixels = {}", op);
+                            LOG.debug("Offset int px = {}", point);
+                        }
+                        LOG.debug("Draw at {}", point);
+                    
+                        out.getGraphics().drawImage(t.imageData(), 
+                                    point.x, 
+                                    point.y, 
                                     null);
-                } catch (TileException ex) {
-                    LOG.error(ex.getMessage(), ex);
+                    } catch (TileException ex) {
+                        LOG.error(ex.getMessage(), ex);
+                    }
+                }else{
+                    LOG.debug("Tile not exists {} {}", x, y);
                 }
             }
         }

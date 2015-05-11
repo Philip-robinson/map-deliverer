@@ -143,7 +143,7 @@ public class TFWMap implements MapConfig{
                 int x=0;
                 for (Double east: xind){
                     Tile t = row.getValue().get(east);
-                    tiles[y][x]=t;
+                    tiles[grid.entrySet().size()-y-1][x]=t;
                     x+=1;
                 }
                 y+=1;

@@ -8,7 +8,7 @@ package uk.co.rpl.mapgen;
 import java.awt.Color;
 import java.awt.Graphics;
 import java.awt.image.BufferedImage;
-import static java.awt.image.BufferedImage.TYPE_INT_BGR;
+import static java.awt.image.BufferedImage.TYPE_INT_RGB;
 import org.slf4j.Logger;
 import static org.slf4j.LoggerFactory.getLogger;
 import uk.co.rpl.mapgen.mapinstances.TileException;
@@ -27,56 +27,65 @@ public class SubTileSetImpl implements TileSet{
     private final XYD relativeScale;
     private final XY noTiles;
     private final XYD eastNorth;
-    private final XY tileOffset;
-    private final XY tileSize;
+    private final XY tileSizePx;
+    private final XY firstTile;
 
     public SubTileSetImpl(TileSet origin, XY size, XYD scale, XYD eastNorth) {
         this.origin = origin;
         this.size = size;
         this.scale = scale;
         this.eastNorth = eastNorth;
-        XYD eastNorthDiff = eastNorth.sub(origin.getEastNorth());
-        LOG.debug("o eastnorth {}, eastnort {}, diff {}",
-                  origin.getEastNorth(), eastNorth, eastNorthDiff);
-        XYD tileSizeMeters =origin.getTileSize().xyd().times(origin.getScale());
-        LOG.debug("Tile size in meters {}", tileSizeMeters);
-        tileOffset = eastNorthDiff.div(tileSizeMeters).xy();
-        LOG.debug("tile off set {}", tileOffset);
-        this.relativeScale = scale.div(origin.getScale());
-        LOG.debug("Relative scale is {}", relativeScale);
-        XYD offsetMetersWithinFirsTile = eastNorthDiff.sub(
-                                tileOffset.xyd().mul(tileSizeMeters));
-        LOG.debug("Offset in meters - first tile {}", offsetMetersWithinFirsTile);
-        XYD sizeMeters = size.xyd().mul(scale);
-        XYD metersOfTilesRequired = sizeMeters.add(offsetMetersWithinFirsTile);
-        noTiles = metersOfTilesRequired.div(tileSizeMeters).ceil();
-        LOG.debug("Number of tiles {}", noTiles);
-        pixelOffset = offsetMetersWithinFirsTile.div(scale).xy();
-        tileSize = origin.getTileSize().xyd().div(relativeScale).xy();
+        final XYD origEN = origin.getTilsetEastNorth();
+        final XYD eastNorthDiff = eastNorth.sub(origEN);
+        final XYD origScale = origin.getScaleMpPx();
+        final XYD tileSizeM = origin.getTileSizeM();
+        final XYD offsetTiles = eastNorthDiff.div(tileSizeM);
+        firstTile = offsetTiles.xy();
+        relativeScale = scale.div(origScale);
+        final XYD offsetInFirstTileM = offsetTiles.sub(firstTile.xyd()).mul(tileSizeM);
+        final XYD sizeMeters = size.xyd().mul(scale);
+        final XYD metersOfTilesRequired = sizeMeters.add(offsetInFirstTileM);
+        noTiles = metersOfTilesRequired.div(tileSizeM).ceil();
+        pixelOffset = offsetInFirstTileM.div(scale).round();
+        tileSizePx = tileSizeM.div(scale).round();
+        if (LOG.isDebugEnabled()){
+            LOG.debug("base tileset origin eastnorth {}", origEN);
+            LOG.debug("this tileset origin eastnorth {}", eastNorth);
+            LOG.debug("Offset to new origin m        {}", eastNorthDiff);
+            LOG.debug("Tile size in meters           {}", tileSizeM);
+            LOG.debug("offset from base tiles        {}", offsetTiles);
+            LOG.debug("Original scale                {}", origScale);
+            LOG.debug("Relative scale                {}", relativeScale);
+            LOG.debug("Offset in m within first tile {}", offsetInFirstTileM);
+            LOG.debug("Tile Set size in m            {}", sizeMeters);
+            LOG.debug("Number of tiles               {}", noTiles);
+            LOG.debug("Offset from first tile px     {}", pixelOffset);
+            LOG.debug("Tile size px                  {}", tileSizePx);
+        }
     }
 
     @Override
-    public XY getTileSize() {
-        return tileSize;
+    public XY getTileSizePx() {
+        return tileSizePx;
     }
 
     @Override
-    public XY getPixelOffset() {
+    public XY getOffsetFromBasePx() {
         return pixelOffset;
     }
 
     @Override
-    public XY getPixelSize() {
+    public XY getTilesetSizePx() {
         return size;
     }
 
     @Override
-    public XYD getScale() {
+    public XYD getScaleMpPx() {
         return scale;
     }
 
     @Override
-    public XY noTiles() {
+    public XY noTilesInTilset() {
         return noTiles;
     }
 
@@ -91,7 +100,7 @@ public class SubTileSetImpl implements TileSet{
     }
 
     @Override
-    public XYD getEastNorth() {
+    public XYD getTilsetEastNorth() {
         return eastNorth;
     }
 
@@ -102,17 +111,18 @@ public class SubTileSetImpl implements TileSet{
 
     @Override
     public BufferedImage getImage() {
-        BufferedImage out = new BufferedImage(getPixelSize().x, 
-                                              getPixelSize().y, 
-                                              TYPE_INT_BGR);
-        for (int x=0; x<noTiles().x; x++){
+        LOG.trace("SubTileSet.getImage");
+        BufferedImage out = new BufferedImage(getTilesetSizePx().x, 
+                                              getTilesetSizePx().y, 
+                                              TYPE_INT_RGB);
+        for (int x=0; x<noTilesInTilset().x; x++){
             LOG.debug("x="+x);
-            for (int y=0; y<noTiles().y; y++){
+            for (int y=0; y<noTilesInTilset().y; y++){
                 LOG.debug("y="+y);
 
                 XY xy = new XY(x, y);
-                XY tileNo = xy.add(tileOffset);
-                XY offset = xy.mul(getTileSize()).sub(pixelOffset);
+                XY tileNo = xy.add(firstTile);
+                XY offset = xy.mul(getTileSizePx()).sub(pixelOffset);
                 Tile t = getTile(tileNo);
                 LOG.debug("Tile no {} = {}", tileNo, t);
                 if (t!=null){
@@ -129,14 +139,19 @@ public class SubTileSetImpl implements TileSet{
                     g.setColor(Color.blue);
                     g.fillRect(offset.x, 
                                offset.y, 
-                               getPixelSize().x,
-                               getPixelSize().y);
+                               getTilesetSizePx().x,
+                               getTilesetSizePx().y);
                     char[] data = ("X="+x+", y="+y).toCharArray();
                     g.drawChars(data, 0, data.length, 5, 5);
                 }
             }
         }
         return out;
+    }
+
+    @Override
+    public XYD getTileSizeM() {
+        return getTileSizePx().xyd().mul(getScaleMpPx());
     }
 
 }

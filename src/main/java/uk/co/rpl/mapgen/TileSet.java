@@ -16,28 +16,28 @@ public interface TileSet {
      * 
      * @return 
      */
-    XY getTileSize();
+    XY getTileSizePx();
     /** pixel offset from origin of the first tile to
      * the origin of the map rectangle
      * @return 
      */
-    XY getPixelOffset();
+    XY getOffsetFromBasePx();
     /**
      * overall size of the map rectangle in pixels
      * @return 
      */
-    XY getPixelSize();
+    XY getTilesetSizePx();
     /**
      * get the scale in meters per pixel
      * @return X will be positive and y will be negative (indicating 
      * pixel 2 is below pixel 1
      */
-    XYD getScale();
+    XYD getScaleMpPx();
     /** the number of tiles required to wholy include the rectangle
      * 
      * @return 
      */
-    XY noTiles();
+    XY noTilesInTilset();
     /** get tile xy
      * tile 0,0 is top left hand side
      * tile 1, 1 is one down and one right
@@ -50,7 +50,7 @@ public interface TileSet {
      * 
      * @return 
      */
-    XYD getEastNorth();
+    XYD getTilsetEastNorth();
 
     /** get a sub tile
      * 
@@ -66,4 +66,10 @@ public interface TileSet {
      * @return 
      */
     BufferedImage getImage();
+
+    /** Size of tile in meters
+     * 
+     * @return 
+     */
+    XYD getTileSizeM();
 }
