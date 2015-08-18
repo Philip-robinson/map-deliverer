@@ -116,5 +116,12 @@ public class XYD {
     public XY entier() {
         return new XY((int)(x>0?Math.ceil(x):x), (int)(y>0?Math.ceil(y):y));
     }
+
+    public XYD abs() {
+        if (x>=0 && y>=0) return this;
+        double xx = x>=0?x:-x;
+        double yy = y>=0?y:-y;
+        return new XYD(xx, yy);
+    }
     
 }

@@ -16,7 +16,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.imageio.ImageIO;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import static org.slf4j.LoggerFactory.getLogger;
 import uk.co.rpl.mapgen.Config;
 import uk.co.rpl.mapgen.MapConfig;
 import static uk.co.rpl.mapgen.MapConfig.SCALE_TYPE.FIXED;
@@ -31,9 +31,11 @@ import uk.co.rpl.mapgen.XYD;
  * @author philip
  */
 public class FixedMap implements MapConfig{
-    private static final Logger LOG = LoggerFactory.getLogger(FixedMap.class);
+    private static final Logger LOG = getLogger(FixedMap.class);
     private final Config config;
     private final String base;
+    private BaseTileSetImpl all;
+    
 
     public FixedMap(Config config, String base){
         this.config = config;
@@ -65,6 +67,16 @@ public class FixedMap implements MapConfig{
     }
 
     @Override
+    public XYD maxTileScale() {
+        return config.getXYD(base+".max-scale-x", base+".max-scale-y", null);
+    }
+
+    @Override
+    public XYD minTileScale() {
+        return config.getXYD(base+".min-scale-x", base+".min-scale-y", null);
+    }
+
+    @Override
     public XYD tile0Origin() {
         return config.getXYD(base+".origin-x", base+".origin-y", null);
     }
@@ -81,6 +93,7 @@ public class FixedMap implements MapConfig{
 
     @Override
     public TileSet allTiles(){
+        if (all != null) return all;
         final Map<Integer, Map<Integer, Tile>> maps = new TreeMap<>();
         final String tilefn = tileFilename();
         String pat1 = tilefn.replaceAll("\\(", "\\(").replaceAll("\\)", "\\)").
@@ -138,7 +151,14 @@ public class FixedMap implements MapConfig{
             }
         }
 
-        return new BaseTileSetImpl(tileScale(), tileSize(), tile0Origin(), tiles);
+        all= new BaseTileSetImpl(tileScale(), tileSize(), tile0Origin(), tiles);
+        return all;
+    }
+
+
+     @Override
+    public String getInstance() {
+        return base;
     }
 
     public class FixedTile implements Tile{

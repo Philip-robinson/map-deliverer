@@ -31,6 +31,8 @@ public class SubTileSetImpl implements TileSet{
     private final XY firstTile;
 
     public SubTileSetImpl(TileSet origin, XY size, XYD scale, XYD eastNorth) {
+        LOG.debug("Origin={}, size={}, scale={}, eastnorth={}", 
+                  origin, size, scale, eastNorth);
         this.origin = origin;
         this.size = size;
         this.scale = scale;
@@ -124,7 +126,7 @@ public class SubTileSetImpl implements TileSet{
                 XY tileNo = xy.add(firstTile);
                 XY offset = xy.mul(getTileSizePx()).sub(pixelOffset);
                 Tile t = getTile(tileNo);
-                LOG.debug("Tile no {} = {}", tileNo, t);
+                LOG.debug("Tile no {}, offset {} = {}", tileNo, offset, t);
                 if (t!=null){
                     try{
                         out.getGraphics().drawImage(t.imageData(), 

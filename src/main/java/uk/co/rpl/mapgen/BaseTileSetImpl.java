@@ -45,8 +45,10 @@ public class BaseTileSetImpl  extends SubTileSupport{
     @Override
     public Tile getTile(XY xy) {
         LOG.debug("tile  {}, size {}", xy, noTiles);
+        if (xy.x<0 || xy.y<0) return null;
         if (xy.x>noTiles.x || xy.y>noTiles.y)return null;
         if (xy.y>=tiles.length) return null;
+        if (tiles[xy.y]==null) return null;
         if (xy.x>=tiles[xy.y].length) return null;
         return tiles[xy.y][xy.x];
     }

@@ -11,14 +11,13 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.imageio.ImageIO;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import static org.slf4j.LoggerFactory.getLogger;
 import uk.co.rpl.mapgen.Config;
 import uk.co.rpl.mapgen.MapConfig;
 import static uk.co.rpl.mapgen.MapConfig.SCALE_TYPE.TFW;
@@ -33,9 +32,10 @@ import uk.co.rpl.mapgen.XYD;
  * @author philip
  */
 public class TFWMap implements MapConfig{
-    private static final Logger LOG = LoggerFactory.getLogger(TFWMap.class);
+    private static final Logger LOG = getLogger(TFWMap.class);
     private final Config config;
     private final String base;
+    private BaseTileSetImpl all;
     public TFWMap(Config config, String baseName){
         this.config=config;
         this.base=baseName;
@@ -57,17 +57,35 @@ public class TFWMap implements MapConfig{
 
     @Override
     public XY tileSize() {
-       return null; 
+       return config.getXY(base+".width", base+".height", null); 
     }
 
     @Override
     public XYD tileScale() {
-        return null;
+        return config.getXYD(base+".scale-x", base+".scale-y", null);
     }
 
     @Override
-    public XYD tile0Origin() {
-        return null;
+    public XYD minTileScale() {
+        return config.getXYD(base+".min-scale-x", base+".min-scale-y", null);
+    }
+
+    @Override
+    public XYD maxTileScale() {
+        return config.getXYD(base+".max-scale-x", base+".max-scale-y", null);
+    }
+
+    private XYD tile00Origin;
+    @Override
+    public synchronized XYD tile0Origin() {
+        if (tile00Origin==null){
+            try {
+                tile00Origin=allTiles().getTilsetEastNorth();
+            } catch (TileException ex) {
+                LOG.error(ex.getMessage(), ex);
+            }
+        }
+        return tile00Origin;
     }
 
     @Override
@@ -80,14 +98,19 @@ public class TFWMap implements MapConfig{
         return config.get(base+".data-filename");
     }
 
+ 
     @Override
     public TileSet allTiles() throws TileException {
+        if (all!=null) return all;
         String dfn = dataFilename();
-        String pat1 = dfn.replaceAll("\\(", "\\(").replaceAll("\\)", "\\)").
-                replaceAll("\\$\\{[^\\}]*\\}", "\\\\\\$\\\\{([^\\\\}]*)\\\\}");
+        String pat1 = dfn.replaceAll("\\(", "\\(").
+                          replaceAll("\\)", "\\)").
+                          replaceAll("\\$\\{[^\\}]*\\}",
+                                     "\\\\\\$\\\\{([^\\\\}]*)\\\\}");
         LOG.debug("Pat 1 {}", pat1);
-        String pat2 = dfn.replaceAll("\\(", "\\(").replaceAll("\\)", "\\)").
-                replaceAll("\\$\\{[^\\}\\{]*\\}", "(.*)");
+        String pat2 = dfn.replaceAll("\\(", "\\(").
+                          replaceAll("\\)", "\\)").
+                          replaceAll("\\$\\{[^\\}\\{]*\\}", "(.*)");
         LOG.debug("Pat 2 {}", pat2);
         final Pattern fnmasterp = Pattern.compile(pat1);
         final Pattern fnp = Pattern.compile(pat2);
@@ -95,10 +118,11 @@ public class TFWMap implements MapConfig{
         Matcher m = fnmasterp.matcher(dfn);
         LOG.debug("Config pattern ? {} cnt={}", m.matches(), m.groupCount());
         TreeMap<Double, Map<Double, Tile>> grid = new TreeMap<>();
-        XYD scale = null;
-        XY size = null;
+        XYD scale = tileScale();
+        XYD size = tileSize().xyd().mul(scale).abs();
+        LOG.info("Loading map {} scale {} size {}", base, scale, size);
         TreeSet<Double> xind = new TreeSet<>();
-        for (File f: dataDir().listFiles()){
+        for (File f: dataDir().listFiles(fx->fnp.matcher(fx.getName()).matches())){
             try{
                 Matcher m1 = fnp.matcher(f.getName());
                 String tileId=null;
@@ -112,10 +136,8 @@ public class TFWMap implements MapConfig{
                 }
                 LOG.debug("tileid -{}, new fn ={}", tileId, newFn);
                 File tf = new File(tileDir(), newFn);
-                LOG.debug("tile file is {}+{} {}", tileDir(), newFn, tf);
+                LOG.debug("tile file is {}", tf);
                 TFWTile t = new TFWTile(tf, tileId, f);
-                if (scale == null) scale = t.scale();
-                if (size==null) size = t.size();
                 if (scale.equals(t.scale)){
                     XYD o = t.origin();
                     Map<Double, Tile> row = grid.get(t.origin().y);
@@ -136,21 +158,35 @@ public class TFWMap implements MapConfig{
             }
         }
         if (!grid.isEmpty() && !xind.isEmpty()){
-            XY tileCnt = new XY(xind.size(), grid.size());
-            Tile[][] tiles = new Tile[tileCnt.y][tileCnt.x];
+            double first = xind.first();
+            double last = xind.last();
+            double bottom=grid.firstKey();
+            double top=grid.lastKey();
+            int tilesEW=(int)Math.round((last-first)/size.x)+1;
+            int tilesNS=(int)Math.round((top-bottom)/size.y)+1;
+            LOG.debug("from east {} to west {} = {} tiles", first, last, tilesEW);
+            LOG.debug("from bottom {} to top {} = {} tiles", bottom, top, tilesNS);
+            Tile[][] tiles = new Tile[tilesNS][tilesEW];
             int y=0;
-            for (Entry<Double, Map<Double, Tile>> row: grid.entrySet()){
+            for (double north = top; north >=bottom; north -= size.y){
+                Map<Double, Tile>row = grid.get(north);
                 int x=0;
-                for (Double east: xind){
-                    Tile t = row.getValue().get(east);
-                    tiles[grid.entrySet().size()-y-1][x]=t;
+                for (Double east=first; east <=last; east += size.x){
+                    Tile t = row==null?null:row.get(east);
+                    tiles[y][x]=t;
                     x+=1;
                 }
                 y+=1;
             }
-            return new BaseTileSetImpl(scale, size, 
+            all = new BaseTileSetImpl(scale, tileSize(), 
                 new XYD(xind.first(), grid.lastKey()), tiles);
+            return all;
         }else throw new TileException("no tiles");
+    }
+
+    @Override
+    public String getInstance() {
+        return base;
     }
     
     public class TFWTile implements Tile{
@@ -206,11 +242,7 @@ public class TFWMap implements MapConfig{
 
         @Override
         public XY size() throws TileException {
-            if (size==null){
-                BufferedImage id = imageData();
-                size = new XY(id.getWidth(), id.getHeight());
-            }
-            return size;
+            return TFWMap.this.tileSize();
         }
 
         @Override
@@ -221,4 +253,10 @@ public class TFWMap implements MapConfig{
         }
         
     }
+
+    @Override
+    public String toString() {
+        return "TFWMap{" + "base=" + base + '}';
+    }
+    
 }

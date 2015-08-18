@@ -101,6 +101,7 @@ public class ConfigImpl implements Config{
                     final MapConfig mc = getMapConfig(mapId);
                     if (mc != null) clist.add(mc);
                 }
+                maps=clist.toArray(new MapConfig[clist.size()]);
             }
         }
         return maps;

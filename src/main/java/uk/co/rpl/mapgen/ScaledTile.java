@@ -55,5 +55,10 @@ public class ScaledTile implements Tile {
     public XY size() throws TileException {
         return oTile.size().xyd().div(relScale).xy();
     }
+
+    @Override
+    public String toString() {
+        return "ScaledTile{" + "oTile=" + oTile + ", relScale=" + relScale + '}';
+    }
     
 }
