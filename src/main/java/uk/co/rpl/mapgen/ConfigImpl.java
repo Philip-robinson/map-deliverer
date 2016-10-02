@@ -4,6 +4,7 @@ import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
+import java.util.TreeSet;
 import org.slf4j.Logger;
 import static org.slf4j.LoggerFactory.getLogger;
 import uk.co.rpl.mapgen.mapinstances.FixedMap;
@@ -28,6 +29,7 @@ public class ConfigImpl implements Config{
             for (String fn: new String[]{
                     "/etc/mapgen/mapgen.properties",
                     "~/mapgen.properties",
+                    "~/.mapgen.properties",
                     "mapgen.properties"}){
                 File f = new File(fn);
                 if (f.exists()){
@@ -38,6 +40,10 @@ public class ConfigImpl implements Config{
             }
         }catch(IOException e){
             LOG.error(e.getMessage(), e);
+        }
+        LOG.info("Configured");
+        for (Object key: new TreeSet(prop.keySet())){
+            LOG.info(String.format(" data %-20s => %s", key, prop.get(key)));
         }
     }
     
