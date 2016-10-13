@@ -8,6 +8,7 @@ package uk.co.rpl.mapgen;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
+import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.awt.Color;
@@ -22,9 +23,14 @@ import java.io.InputStreamReader;
 import java.io.Reader;
 import java.net.InetSocketAddress;
 import java.net.URI;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.Arrays;
+import java.util.Calendar;
+import java.util.Date;
 import java.util.Map;
 import java.util.Properties;
+import java.util.TimeZone;
 import java.util.TreeMap;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -36,6 +42,7 @@ import org.apache.log4j.PropertyConfigurator;
 import org.slf4j.Logger;
 import uk.co.rpl.mapgen.mapinstances.TileException;
 import static org.slf4j.LoggerFactory.getLogger;
+import static org.slf4j.LoggerFactory.getLogger;
 
 /**
  *
@@ -43,9 +50,14 @@ import static org.slf4j.LoggerFactory.getLogger;
  */
 public class MapGen {
 
-    static Logger LOG;
 
-    static BlockingQueue<Runnable> requests = new LinkedBlockingQueue<>(5);
+    static Logger LOG;
+    static Map<Double, Map<Double, File>> map = new TreeMap<>();
+    static Date startTime = new Date();
+    static int cacheExpirySeconds;
+    static BlockingQueue<Runnable> requests = new LinkedBlockingQueue<>(50);
+    static long ref = startTime.getTime()-1476312000000L;
+
     static void reporter() {
         try {
             for (;;) {
@@ -92,7 +104,6 @@ public class MapGen {
         return res;
     }
 
-    static Map<Double, Map<Double, File>> map = new TreeMap<>();
 
     static void add(double x, double y, File f) {
         Map<Double, File> map2 = map.get(y);
@@ -104,6 +115,8 @@ public class MapGen {
     }
 
     public static void main(String[] argv) throws IOException {
+        
+        startTime = Calendar.getInstance(TimeZone.getTimeZone("GMT")).getTime();
         Properties l4jprops = new Properties();
         l4jprops.load(MapGen.class.getResourceAsStream("/log4j.properties"));
         System.out.println("/log4j.properties loaded");
@@ -121,6 +134,7 @@ public class MapGen {
         for (int i=0; i<100; i++) new Thread(()->{
             try{
                 for (;;){
+                    LOG.debug("LOOP");
                     requests.take().run();
                 }
             }catch(InterruptedException e){
@@ -131,11 +145,14 @@ public class MapGen {
             final MapConfig[] maps = con.maps();
             LOG.info("Loaded " + Arrays.asList(maps));
 
+            cacheExpirySeconds = con.getInt("cache-age", 86400);
+
             int port = con.getInt("port", 7664);
             HttpServer server = HttpServer.create(
                 new InetSocketAddress(port), 100);
             server.setExecutor(r->{
                 try{
+                    LOG.debug("request-received");
                     requests.put(r);
                 }catch (InterruptedException e){
                     LOG.error("Interrupted");
@@ -149,12 +166,43 @@ public class MapGen {
         }
     }
 
-    private static void listener(HttpExchange e, MapConfig[] maps) throws IOException, NumberFormatException {
+    private static void listener(HttpExchange httpEx, MapConfig[] maps) 
+        throws IOException, NumberFormatException {
         long start = System.currentTimeMillis();
-        URI uri = e.getRequestURI();
+        URI uri = httpEx.getRequestURI();
         LOG.info("Received request {}", uri);
-        
+        Calendar c = Calendar.getInstance(TimeZone.getTimeZone("GMT"));
+        SimpleDateFormat sdf = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz");
+        sdf.setTimeZone(TimeZone.getTimeZone("GMT"));
+        String date = sdf.format(c.getTime());
+        c.add(Calendar.SECOND, cacheExpirySeconds);
+        String expires = sdf.format(c.getTime());
+        String modified =sdf.format(startTime);
+
+        Headers reqH = httpEx.getRequestHeaders();
+        Headers respH = httpEx.getResponseHeaders();
+        respH.add("Cache-Control", "max-age="+cacheExpirySeconds);
+        respH.add("Date", date);
+        respH.add("Expires", expires);
+        respH.add("Last-Modified", modified);
+        String since = reqH.getFirst("If-Modified-Since");
+        Date dSince = null;
+        if (since!=null){
+            try {
+                dSince = sdf.parse(since);
+            } catch (ParseException ex) {
+                LOG.error("Failed to parse {}", since);
+            }
+        }
+        if (LOG.isDebugEnabled()){
+            LOG.debug("Set headers");
+            LOG.debug("max-age {}", ""+cacheExpirySeconds);
+            LOG.debug("Date {}", date);
+            LOG.debug("Expires {}", expires);
+            LOG.debug("Last-Modified {}", modified);
+        }
         String q = uri.getQuery();
+         
         StringBuilder error = new StringBuilder();
         Consumer<String> addErr = err -> {
             synchronized (error) {
@@ -164,12 +212,12 @@ public class MapGen {
                 error.append(err);
             }
         };
-        String length = e.getRequestHeaders().getFirst("content-length");
+        String length = reqH.getFirst("content-length");
         JSONObject data = new JSONObject();
         if (length != null
                     && length.length() != 0
                     && !"0".equals(length)) {
-            data = getBody(length, e);
+            data = getBody(length, httpEx);
         }
         if (q != null) {
             NEWHS spec = new NEWHS();
@@ -184,12 +232,23 @@ public class MapGen {
                 XYD eastnorth = spec.eastnorth();
                 XYD scaling = spec.scaling();
                 XYD enTC = spec.enTC();
-                LOG.debug("TL {}, sc {}, siz {}, centre {}",
+                String etag = "\""+(ref)+":"+spec+"\"";
+                respH.add("Etag", etag);
+                String setIfMatch = reqH.getFirst("If-None-Match");
+                if (LOG.isDebugEnabled()){
+                    LOG.debug("eastnorth {}, sacle {}, size {}, centre {}",
                                   eastnorth, scaling, size, enTC);
-                LOG.debug("sc*siz={} /2={}", scaling.mul(
-                    size.xyd()), scaling.mul(
-                        size.xyd()).divide(2));
-                
+                    LOG.debug("sc*siz={} /2={}", scaling.mul(
+                           size.xyd()), scaling.mul(size.xyd()).divide(2));
+                    LOG.debug("dSince {}, startTime {}", dSince, startTime);
+                }
+                if (setIfMatch == null || etag.equals(setIfMatch)){
+                    if (dSince != null && dSince.after(startTime)){
+                        httpEx.sendResponseHeaders(304, 0);
+                        httpEx.close();
+                        return;
+                    }
+                }
                 try {
                     MapConfig cur = getBestMap(maps, enTC, scaling, size);
                     if (cur == null) {
@@ -203,7 +262,7 @@ public class MapGen {
                             BufferedImage img = tsO.getImage();
                             writeData(img, data, eastnorth,
                                                          size, scaling);
-                            returnMap(baos, img, e, start);
+                            returnMap(baos, img, httpEx, start);
                             return;
                         } catch (IOException | TileException te) {
                             addErr.accept(te.getMessage());
@@ -218,11 +277,11 @@ public class MapGen {
             addErr.accept("No parameters provided");
         }
         byte[] erres = error.toString().getBytes("UTF-8");
-        e.getResponseHeaders().add("Content-type", "text/plain");
+        httpEx.getResponseHeaders().add("Content-type", "text/plain");
         LOG.warn("Sending " + error);
-        e.sendResponseHeaders(400, erres.length);
-        e.getResponseBody().write(erres);
-        e.close();
+        httpEx.sendResponseHeaders(400, erres.length);
+        httpEx.getResponseBody().write(erres);
+        httpEx.close();
         LOG.info("Aborted in {}ms", System.currentTimeMillis()-start);
     }
 
@@ -381,6 +440,10 @@ public class MapGen {
             return eastnorth().sub(scaling().mul(
                 size().xyd()).divide(2));
         }
+        public String toString(){
+            double sc = scale==null?1:scale;
+            return ((long)(north/sc/height))+":"+((long)(east/sc/width))+":"+
+                   width+":"+height+":"+scale;
+        }
     }
-
 }
