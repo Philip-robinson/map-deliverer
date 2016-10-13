@@ -1,0 +1,124 @@
+#! /bin/bash
+### BEGIN INIT INFO
+# Provides:          java-tf
+# Required-Start:		$local_fs $network
+# Required-Stop:		$local_fs $network
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Map supplier
+# Description:       Supply maps of GB
+### END INIT INFO
+
+logdir=/var/log/mapgen
+javalog="mapgen.log"
+javajar="/opt/servers/mapgen/mapgen.jar"
+shortname=mapgen
+
+[ ! -d "$logdir" ] && mkdir-p "$logdir"
+
+# Check the application status
+check_status() {
+	status=$(pgrep -f "java -jar $javajar")
+
+	# If something was returned by the ps command,
+	# this function returns a list of PIDS
+	if [ "X$status" != "X"  ]
+	then
+		echo "$status"
+	else
+		echo "NONE"
+	fi
+}
+
+# Starts the application
+start() {
+
+	# At first checks if the application is already started calling the
+	# check_status function
+	pids=$(check_status)
+
+	if [ "$pids" != "NONE" ] ; then
+		echo "$shortname is already started"
+		return 1
+	fi
+
+	# If the application isn't running, starts it
+	echo -n "Starting $shortname: "
+
+	# Redirects default and error output to a log file
+	sudo -u mapgen java -jar $javajar >> $logdir/$javalog 2>&1 &
+
+	sleep 1 
+	pids=$(check_status)
+	if [ "$pids" == "NONE" ]
+	then
+		echo "Failed"
+	else
+		echo "OK"
+	fi
+}
+
+# Stops the application
+shutdown() {
+
+	# Like as the start function, checks the application status
+	pids=$(check_status)
+
+	if [ "$pids" == "NONE" ] ; then
+		echo "$shortname is already stopped"
+		return 0
+	fi
+
+	# Kills the application process
+	echo -n "Stopping $shortname: "
+	kill $pids
+	fin=0
+	while [ $fin -eq 0 ]
+	do 
+		fin=1
+		for pid in $pids
+		do
+			[ -d /proc/$pid ] && fin=0
+			echo -n "."
+			sleep 1
+		done
+	done
+	echo "OK"
+}
+
+# Show the application status
+status() {
+
+	# The check_status function, again...
+	pids=$(check_status)
+
+	# If the PID was returned means the application is running
+	if [ "$pids" != "NONE" ] ; then
+		echo "$shortname is started"
+	else
+		echo "$shortname is stopped"
+	fi
+
+}
+
+# Main logic, a simple case to call functions
+case "$1" in
+	start)
+		start
+		;;
+	stop)
+		shutdown
+		;;
+	status)
+		status
+		;;
+	restart|reload)
+		stop
+		start
+		;;
+	*)
+		echo "Usage: $0 {start|stop|restart|reload|status}"
+		exit 1
+esac
+
+exit 0

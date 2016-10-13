@@ -8,6 +8,7 @@ package uk.co.rpl.mapgen;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
+import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.awt.Color;
@@ -22,18 +23,26 @@ import java.io.InputStreamReader;
 import java.io.Reader;
 import java.net.InetSocketAddress;
 import java.net.URI;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.Arrays;
+import java.util.Calendar;
+import java.util.Date;
 import java.util.Map;
 import java.util.Properties;
+import java.util.TimeZone;
 import java.util.TreeMap;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.function.Consumer;
 import java.util.function.DoubleSupplier;
 import javax.imageio.ImageIO;
 import javax.imageio.stream.ImageOutputStream;
 import org.apache.log4j.PropertyConfigurator;
 import org.slf4j.Logger;
-import static org.slf4j.LoggerFactory.getLogger;
 import uk.co.rpl.mapgen.mapinstances.TileException;
+import static org.slf4j.LoggerFactory.getLogger;
+import static org.slf4j.LoggerFactory.getLogger;
 
 /**
  *
@@ -41,19 +50,25 @@ import uk.co.rpl.mapgen.mapinstances.TileException;
  */
 public class MapGen {
 
+
     static Logger LOG;
+    static Map<Double, Map<Double, File>> map = new TreeMap<>();
+    static Date startTime = new Date();
+    static int cacheExpirySeconds;
+    static BlockingQueue<Runnable> requests = new LinkedBlockingQueue<>(50);
+    static long ref = startTime.getTime()-1476312000000L;
 
     static void reporter() {
         try {
             for (;;) {
                 Thread.sleep(10000);
                 if (LOG != null && LOG.isInfoEnabled()) {
-                    LOG.info("Memory total {} Gb, "
-                             + "or which {} Gb is free, "
-                             + "max is {} Gb",
-                             (Runtime.getRuntime().totalMemory() / 10000) / 100.0,
-                             (Runtime.getRuntime().freeMemory() / 10000) / 100.0,
-                             (Runtime.getRuntime().maxMemory() / 10000) / 100.0);
+                    LOG.info("Memory total {} Mb, "
+                             + "or which {} Mb is free, "
+                             + "max is {} Mb",
+                             (Runtime.getRuntime().totalMemory()/1000)/1000.0,
+                             (Runtime.getRuntime().freeMemory()/1000)/1000.0,
+                             (Runtime.getRuntime().maxMemory()/1000)/1000.0);
                 }
                 Thread.sleep(3000000);
             }
@@ -89,7 +104,6 @@ public class MapGen {
         return res;
     }
 
-    static Map<Double, Map<Double, File>> map = new TreeMap<>();
 
     static void add(double x, double y, File f) {
         Map<Double, File> map2 = map.get(y);
@@ -101,6 +115,8 @@ public class MapGen {
     }
 
     public static void main(String[] argv) throws IOException {
+        
+        startTime = Calendar.getInstance(TimeZone.getTimeZone("GMT")).getTime();
         Properties l4jprops = new Properties();
         l4jprops.load(MapGen.class.getResourceAsStream("/log4j.properties"));
         System.out.println("/log4j.properties loaded");
@@ -115,117 +131,190 @@ public class MapGen {
         PropertyConfigurator.configure(l4jprops);
         LOG = getLogger(MapGen.class);
         new Thread(MapGen::reporter).start();
+        for (int i=0; i<100; i++) new Thread(()->{
+            try{
+                for (;;){
+                    LOG.debug("LOOP");
+                    requests.take().run();
+                }
+            }catch(InterruptedException e){
+                LOG.error("interrupted");
+            }}).start();
         try {
             Config con = new ConfigImpl();
-            MapConfig[] maps = con.maps();
+            final MapConfig[] maps = con.maps();
             LOG.info("Loaded " + Arrays.asList(maps));
-            System.out.println("maps is " + Arrays.asList(maps));
+
+            cacheExpirySeconds = con.getInt("cache-age", 86400);
 
             int port = con.getInt("port", 7664);
             HttpServer server = HttpServer.create(
                 new InetSocketAddress(port), 100);
-            server.createContext("/", e -> {
-                long start = System.currentTimeMillis();
-                URI uri = e.getRequestURI();
-                LOG.info("Received request {}", uri);
-
-                String q = uri.getQuery();
-                StringBuilder error = new StringBuilder();
-                Consumer<String> addErr = err -> {
-                    synchronized (error) {
-                        if (error.length() > 0) {
-                            error.append(", ");
-                        }
-                        error.append(err);
-                    }
-                };
-                String length = e.getRequestHeaders().getFirst("content-length");
-                JSONObject data = new JSONObject();
-                if (length != null
-                    && length.length() != 0
-                    && !"0".equals(length)) {
-                    data = getBody(length, e);
-                }
-                if (q != null) {
-                    NEWHS spec = new NEWHS();
-                    String[] params = q.split("&");
-
-                    for (String pair : params) {
-                        parseQuery(pair, spec, addErr);
-                    }
-                    spec.checkAllPresent(error, addErr);
-                    if (error.length() == 0) {
-                        XY size = spec.size();
-                        XYD eastnorth = spec.eastnorth();
-                        XYD scaling = spec.scaling();
-                        XYD enTC = spec.enTC();
-                        LOG.debug("TL {}, sc {}, siz {}, centre {}",
-                                  eastnorth, scaling, size, enTC);
-                        LOG.debug("sc*siz={} /2={}", scaling.mul(
-                                  size.xyd()), scaling.mul(
-                                      size.xyd()).divide(2));
-
-                        MapConfig cur = null;
-                        int curSuitability = 100;
-                        try {
-                            for (MapConfig mc : maps) {
-                                int s = mc.suitability(enTC, scaling, size);
-                                LOG.debug("Map config {}:{} score= {}",
-                                          mc.scaleType(), mc.getInstance(), s);
-                                if (cur == null || curSuitability < s) {
-                                    curSuitability = s;
-                                    cur = mc;
-                                }
-                            }
-                            if (cur == null) {
-                                addErr.accept("Cannot find a suitable map");
-                            } else {
-                                try {
-                                    TileSet ts = cur.allTiles();
-                                    TileSet tsO = ts.sub(size, scaling, enTC);
-                                    ByteArrayOutputStream baos
-                                                          = new ByteArrayOutputStream();
-                                    BufferedImage img = tsO.getImage();
-                                    writeData(img, data, eastnorth,
-                                              size, scaling);
-                                    try (ImageOutputStream io =
-                                         ImageIO.createImageOutputStream(baos)) {
-                                        ImageIO.write(img, "png", io);
-                                        byte[] res = baos.toByteArray();
-                                        e.getResponseHeaders().add(
-                                            "Content-type", "image/png");
-                                        e.sendResponseHeaders(200, res.length);
-                                        e.getResponseBody().write(res);
-                                        e.close();
-                                        LOG.info("Completed in {}ms", System.currentTimeMillis()-start);
-                                        return;
-                                    }
-                                } catch (IOException | TileException te) {
-                                    addErr.accept(te.getMessage());
-                                }
-                            }
-                        } catch (Throwable th) {
-                            LOG.error(th.getMessage(), th);
-                            addErr.accept(th.getMessage());
-                        }
-                    }
-                } else {
-                    addErr.accept("No parameters provided");
-                }
-                byte[] erres = error.toString().getBytes("UTF-8");
-                e.getResponseHeaders().add("Content-type", "text/plain");
-                LOG.warn("Sending " + error);
-                e.sendResponseHeaders(400, erres.length);
-                e.getResponseBody().write(erres);
-                e.close();
-                LOG.info("Aborted in {}ms", System.currentTimeMillis()-start);
-            });
+            server.setExecutor(r->{
+                try{
+                    LOG.debug("request-received");
+                    requests.put(r);
+                }catch (InterruptedException e){
+                    LOG.error("Interrupted");
+                }});
+            server.createContext("/", e -> listener(e, maps));
             server.start();
             LOG.info("Server started on port {}", port);
             System.out.println("Server started on port " + port);
         } catch (IOException ex) {
             LOG.error(ex.getMessage(), ex);
         }
+    }
+
+    private static void listener(HttpExchange httpEx, MapConfig[] maps) 
+        throws IOException, NumberFormatException {
+        long start = System.currentTimeMillis();
+        URI uri = httpEx.getRequestURI();
+        LOG.info("Received request {}", uri);
+        Calendar c = Calendar.getInstance(TimeZone.getTimeZone("GMT"));
+        SimpleDateFormat sdf = new SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz");
+        sdf.setTimeZone(TimeZone.getTimeZone("GMT"));
+        String date = sdf.format(c.getTime());
+        c.add(Calendar.SECOND, cacheExpirySeconds);
+        String expires = sdf.format(c.getTime());
+        String modified =sdf.format(startTime);
+
+        Headers reqH = httpEx.getRequestHeaders();
+        Headers respH = httpEx.getResponseHeaders();
+        respH.add("Cache-Control", "max-age="+cacheExpirySeconds);
+        respH.add("Date", date);
+        respH.add("Expires", expires);
+        respH.add("Last-Modified", modified);
+        String since = reqH.getFirst("If-Modified-Since");
+        Date dSince = null;
+        if (since!=null){
+            try {
+                dSince = sdf.parse(since);
+            } catch (ParseException ex) {
+                LOG.error("Failed to parse {}", since);
+            }
+        }
+        if (LOG.isDebugEnabled()){
+            LOG.debug("Set headers");
+            LOG.debug("max-age {}", ""+cacheExpirySeconds);
+            LOG.debug("Date {}", date);
+            LOG.debug("Expires {}", expires);
+            LOG.debug("Last-Modified {}", modified);
+        }
+        String q = uri.getQuery();
+         
+        StringBuilder error = new StringBuilder();
+        Consumer<String> addErr = err -> {
+            synchronized (error) {
+                if (error.length() > 0) {
+                    error.append(", ");
+                }
+                error.append(err);
+            }
+        };
+        String length = reqH.getFirst("content-length");
+        JSONObject data = new JSONObject();
+        if (length != null
+                    && length.length() != 0
+                    && !"0".equals(length)) {
+            data = getBody(length, httpEx);
+        }
+        if (q != null) {
+            NEWHS spec = new NEWHS();
+            String[] params = q.split("&");
+            
+            for (String pair : params) {
+                parseQuery(pair, spec, addErr);
+            }
+            spec.checkAllPresent(error, addErr);
+            if (error.length() == 0) {
+                XY size = spec.size();
+                XYD eastnorth = spec.eastnorth();
+                XYD scaling = spec.scaling();
+                XYD enTC = spec.enTC();
+                String etag = "\""+(ref)+":"+spec+"\"";
+                respH.add("Etag", etag);
+                String setIfMatch = reqH.getFirst("If-None-Match");
+                if (LOG.isDebugEnabled()){
+                    LOG.debug("eastnorth {}, sacle {}, size {}, centre {}",
+                                  eastnorth, scaling, size, enTC);
+                    LOG.debug("sc*siz={} /2={}", scaling.mul(
+                           size.xyd()), scaling.mul(size.xyd()).divide(2));
+                    LOG.debug("dSince {}, startTime {}", dSince, startTime);
+                }
+                if (setIfMatch == null || etag.equals(setIfMatch)){
+                    if (dSince != null && dSince.after(startTime)){
+                        httpEx.sendResponseHeaders(304, 0);
+                        httpEx.close();
+                        return;
+                    }
+                }
+                try {
+                    MapConfig cur = getBestMap(maps, enTC, scaling, size);
+                    if (cur == null) {
+                        addErr.accept("Cannot find a suitable map");
+                    } else {
+                        try {
+                            TileSet ts = cur.allTiles();
+                            TileSet tsO = ts.sub(size, scaling, enTC);
+                            ByteArrayOutputStream baos
+                                    = new ByteArrayOutputStream();
+                            BufferedImage img = tsO.getImage();
+                            writeData(img, data, eastnorth,
+                                                         size, scaling);
+                            returnMap(baos, img, httpEx, start);
+                            return;
+                        } catch (IOException | TileException te) {
+                            addErr.accept(te.getMessage());
+                        }
+                    }
+                } catch (Throwable th) {
+                    LOG.error(th.getMessage(), th);
+                    addErr.accept(th.getMessage());
+                }
+            }
+        } else {
+            addErr.accept("No parameters provided");
+        }
+        byte[] erres = error.toString().getBytes("UTF-8");
+        httpEx.getResponseHeaders().add("Content-type", "text/plain");
+        LOG.warn("Sending " + error);
+        httpEx.sendResponseHeaders(400, erres.length);
+        httpEx.getResponseBody().write(erres);
+        httpEx.close();
+        LOG.info("Aborted in {}ms", System.currentTimeMillis()-start);
+    }
+
+    private static void returnMap(ByteArrayOutputStream baos, BufferedImage img,
+                                  HttpExchange e, long start) throws IOException {
+        try (final ImageOutputStream io = ImageIO.createImageOutputStream(baos)) {
+            ImageIO.write(img, "png", io);
+            byte[] res = baos.toByteArray();
+            e.getResponseHeaders().add(
+                "Content-type", "image/png");
+            e.sendResponseHeaders(200, res.length);
+            e.getResponseBody().write(res);
+            e.close();
+            LOG.info("Completed in {}ms", System.currentTimeMillis()-start);
+            return;
+        }
+    }
+
+    private static MapConfig getBestMap(MapConfig[] maps,
+                                        XYD enTC, XYD scaling, XY size 
+                                        ) throws TileException {
+        MapConfig cur = null;
+        int curSuitability= 100;
+        for (MapConfig mc : maps) {
+            int s = mc.suitability(enTC, scaling, size);
+            LOG.debug("Map config {}:{} score= {}",
+                                  mc.scaleType(), mc.getInstance(), s);
+            if (cur == null || curSuitability < s) {
+                curSuitability = s;
+                cur = mc;
+            }
+        }
+        return cur;
     }
 
     private static JSONObject getBody(String length, HttpExchange e) throws IOException, NumberFormatException {
@@ -351,6 +440,10 @@ public class MapGen {
             return eastnorth().sub(scaling().mul(
                 size().xyd()).divide(2));
         }
+        public String toString(){
+            double sc = scale==null?1:scale;
+            return ((long)(north/sc/height))+":"+((long)(east/sc/width))+":"+
+                   width+":"+height+":"+scale;
+        }
     }
-
 }
