@@ -7,6 +7,7 @@ package uk.co.rpl.mapgen;
 
 import org.slf4j.Logger;
 import static org.slf4j.LoggerFactory.getLogger;
+import uk.co.rpl.mapgen.mapinstances.TileCacheManager;
 
 /**
  *
@@ -22,14 +23,18 @@ public class BaseTileSetImpl  extends SubTileSupport{
     private final XYD eastNorth;
     private final XY noTiles;
     private final XY pixels;
+    private final TileCacheManager cacheManager;
 
-    public BaseTileSetImpl(XYD scale, XY tileSize, XYD eastWest, Tile[][] tiles){
+    public BaseTileSetImpl(XYD scale, XY tileSize,
+                           XYD eastWest, Tile[][] tiles,
+                           TileCacheManager cacheManager){
         this.scale = scale;
         this.tileSize = tileSize;
         this.tiles = tiles;
         this.noTiles = new XY(tiles[0].length, tiles.length);
         this.pixels = noTiles.mul(tileSize);
         this.eastNorth=eastWest;
+        this.cacheManager=cacheManager;
     }
 
     @Override
@@ -78,7 +83,7 @@ public class BaseTileSetImpl  extends SubTileSupport{
 
     @Override
     public TileSet sub(XY pixelSize, XYD scale, XYD eastNorth) {
-        return new SubTileSetImpl(this, pixelSize, scale, eastNorth);
+        return new SubTileSetImpl(this, pixelSize, scale, eastNorth, cacheManager);
     }
 
     @Override

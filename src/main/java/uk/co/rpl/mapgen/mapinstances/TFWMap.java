@@ -26,6 +26,7 @@ import uk.co.rpl.mapgen.TileSet;
 import uk.co.rpl.mapgen.BaseTileSetImpl;
 import uk.co.rpl.mapgen.XY;
 import uk.co.rpl.mapgen.XYD;
+import static org.slf4j.LoggerFactory.getLogger;
 
 /**
  *
@@ -36,9 +37,11 @@ public class TFWMap implements MapConfig{
     private final Config config;
     private final String base;
     private BaseTileSetImpl all;
-    public TFWMap(Config config, String baseName){
+    private final TileCacheManager cacheManager;
+    public TFWMap(Config config, String baseName, TileCacheManager cacheManager){
         this.config=config;
         this.base=baseName;
+        this.cacheManager = cacheManager;
     }
     @Override
     public File tileDir() {
@@ -179,7 +182,8 @@ public class TFWMap implements MapConfig{
                 y+=1;
             }
             all = new BaseTileSetImpl(scale, tileSize(), 
-                new XYD(xind.first(), grid.lastKey()), tiles);
+                new XYD(xind.first(), grid.lastKey()), tiles,
+                    cacheManager);
             return all;
         }else throw new TileException("no tiles");
     }
@@ -195,6 +199,7 @@ public class TFWMap implements MapConfig{
         private final XYD scale;
         private final XYD eastNorth;
         private XY size;
+        private BufferedImage data;
 
         public TFWTile(File tileFile, String ident, File dataFile)
             throws TileException {
@@ -222,11 +227,14 @@ public class TFWMap implements MapConfig{
         @Override
         public BufferedImage imageData() throws TileException {
             try {
-                LOG.debug("Reading {}", tileFile);
-                return ImageIO.read(tileFile);
+                synchronized(tileFile){
+                    if (data == null) data = ImageIO.read(tileFile);
+                    return data;
+                }
             } catch (IOException ex) {
-                LOG.warn("Faied reading tile "+ex.getMessage(), ex);
                 throw new TileException(ex);
+            }finally{
+                cacheManager.accessed(this);
             }
         }
 
@@ -252,6 +260,12 @@ public class TFWMap implements MapConfig{
                    ", size=" + size + '}';
         }
         
+        @Override
+        public void flushCache() {
+            synchronized(tileFile){
+                data = null;
+            }
+        }
     }
 
     @Override

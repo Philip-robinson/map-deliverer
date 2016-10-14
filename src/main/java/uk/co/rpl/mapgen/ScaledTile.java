@@ -7,19 +7,25 @@ package uk.co.rpl.mapgen;
 
 import java.awt.image.BufferedImage;
 import static java.awt.image.BufferedImage.TYPE_INT_BGR;
+import org.slf4j.Logger;
+import uk.co.rpl.mapgen.mapinstances.TileCacheManager;
 import uk.co.rpl.mapgen.mapinstances.TileException;
+import static org.slf4j.LoggerFactory.getLogger;
 
 /**
  *
  * @author philip
  */
 public class ScaledTile implements Tile {
+    public static Logger LOG = getLogger(ScaledTile.class);
     private final Tile oTile;
     private final XYD relScale;
+    private final TileCacheManager cacheManager;
 
-    public ScaledTile(Tile tile, XYD relScale) {
+    public ScaledTile(Tile tile, XYD relScale, TileCacheManager cacheManager) {
         oTile = tile;
         this.relScale = relScale;
+        this.cacheManager = cacheManager;
     }
 
     @Override
@@ -29,15 +35,28 @@ public class ScaledTile implements Tile {
 
     @Override
     public BufferedImage imageData() throws TileException {
-        if (oTile==null) return null;
-        BufferedImage bi = oTile.imageData();
-        if (relScale.x==1 && relScale.y==1) return bi;
-        BufferedImage nbi = new BufferedImage((int)(bi.getWidth()/relScale.x), 
-                                              (int)(bi.getHeight()/relScale.y),
-                                              TYPE_INT_BGR);
-        nbi.getGraphics().drawImage(bi, 0, 0, nbi.getWidth(), nbi.getHeight(),
-                                                              null);
-        return nbi;
+        while (true){
+            try{
+                if (oTile==null) return null;
+                BufferedImage bi = oTile.imageData();
+                if (relScale.x==1 && relScale.y==1) return bi;
+                BufferedImage nbi = new BufferedImage(
+                    (int)(bi.getWidth()/relScale.x), 
+                    (int)(bi.getHeight()/relScale.y),
+                    TYPE_INT_BGR);
+                nbi.getGraphics().drawImage(bi, 0, 0, 
+                    nbi.getWidth(), nbi.getHeight(), null);
+                return nbi;
+            }catch(OutOfMemoryError e){
+                LOG.info("Out of memory Exception - recovering");
+                try {
+                    cacheManager.partialCacheFlush();
+                    Thread.sleep(100);
+                } catch (InterruptedException ex) {
+                    throw new TileException(ex);
+                }
+            }
+        }
         
     }
 
@@ -59,6 +78,11 @@ public class ScaledTile implements Tile {
     @Override
     public String toString() {
         return "ScaledTile{" + "oTile=" + oTile + ", relScale=" + relScale + '}';
+    }
+
+    @Override
+    public void flushCache() {
+        throw new UnsupportedOperationException("Not supported yet.");
     }
     
 }

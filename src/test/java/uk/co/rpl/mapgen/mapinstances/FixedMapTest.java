@@ -39,6 +39,7 @@ public class FixedMapTest {
     double EAST=50;
     double NORTH=600000;
     File dir = new File("/tmp/TEST-MAP-IMAGES/FixedMapTestImages/");
+    TileCacheManager cacheManager;
     
     public FixedMapTest() {
         BasicConfigurator.resetConfiguration();
@@ -61,7 +62,13 @@ public class FixedMapTest {
                                 "MiniScale${y}x${x}.png").anyTimes();
         replay(config);
 
-        inst = new FixedMap(config, BASE);
+        cacheManager = createMock(TileCacheManager.class);
+        cacheManager.accessed(anyObject());
+        expectLastCall().anyTimes();
+        cacheManager.partialCacheFlush();
+        expectLastCall().anyTimes();
+        replay(cacheManager);
+        inst = new FixedMap(config, BASE, cacheManager);
     }
     @Test
     public void testTileDir() {
@@ -165,7 +172,7 @@ public class FixedMapTest {
                                 "MiniScale${y}x${x}.png").anyTimes();
         replay(config);
 
-        inst = new FixedMap(config, BASE);
+        inst = new FixedMap(config, BASE, cacheManager);
 
         BufferedImage bi = inst.allTiles().getImage();
         try(ImageOutputStream out  = ImageIO.createImageOutputStream(
@@ -199,7 +206,7 @@ public class FixedMapTest {
                                 "MiniScale${y}x${x}.png").anyTimes();
         replay(config);
 
-        inst = new FixedMap(config, BASE);
+        inst = new FixedMap(config, BASE, cacheManager);
 
         TileSet ts = inst.allTiles().sub(new XY(TILE_SIZE*3, TILE_SIZE*3),
                                          new XYD(SCALE_2, -SCALE_2),
@@ -245,7 +252,7 @@ public class FixedMapTest {
                                 "MiniScale${y}x${x}.png").anyTimes();
         replay(config);
 
-        inst = new FixedMap(config, BASE);
+        inst = new FixedMap(config, BASE, cacheManager);
 
         TileSet ts = inst.allTiles().sub(new XY(TILE_SIZE*3, TILE_SIZE*3),
                                          new XYD(SCALE_2, -SCALE_2),
@@ -291,7 +298,7 @@ public class FixedMapTest {
                                 "MiniScale${y}x${x}.png").anyTimes();
         replay(config);
 
-        inst = new FixedMap(config, BASE);
+        inst = new FixedMap(config, BASE, cacheManager);
 
         TileSet ts = inst.allTiles().sub(new XY(TILE_SIZE*3, TILE_SIZE*3),
                                          new XYD(SCALE_2, -SCALE_2),
@@ -337,7 +344,7 @@ public class FixedMapTest {
                                 "MiniScale${y}x${x}.png").anyTimes();
         replay(config);
 
-        inst = new FixedMap(config, BASE);
+        inst = new FixedMap(config, BASE, cacheManager);
 
         TileSet ts = inst.allTiles().sub(new XY(TILE_SIZE*3, TILE_SIZE*3),
                                          new XYD(SCALE_2, -SCALE_2),
@@ -383,7 +390,7 @@ public class FixedMapTest {
                                 "MiniScale${y}x${x}.png").anyTimes();
         replay(config);
 
-        inst = new FixedMap(config, BASE);
+        inst = new FixedMap(config, BASE, cacheManager);
 
         TileSet ts = inst.allTiles().sub(new XY(TILE_SIZE*3, TILE_SIZE*3),
                                          new XYD(SCALE_2, -SCALE_2),

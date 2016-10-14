@@ -11,6 +11,7 @@ import java.awt.image.BufferedImage;
 import static java.awt.image.BufferedImage.TYPE_INT_RGB;
 import org.slf4j.Logger;
 import static org.slf4j.LoggerFactory.getLogger;
+import uk.co.rpl.mapgen.mapinstances.TileCacheManager;
 import uk.co.rpl.mapgen.mapinstances.TileException;
 
 /**
@@ -29,8 +30,12 @@ public class SubTileSetImpl implements TileSet{
     private final XYD eastNorth;
     private final XY tileSizePx;
     private final XY firstTile;
+    private final TileCacheManager cacheManager;
+    private static final Color PALE_BLUE = new Color(127, 127, 255);
 
-    public SubTileSetImpl(TileSet origin, XY size, XYD scale, XYD eastNorth) {
+    public SubTileSetImpl(TileSet origin, XY size,
+                          XYD scale, XYD eastNorth,
+                          TileCacheManager cacheManager) {
         LOG.debug("Origin={}, size={}, scale={}, eastnorth={}", 
                   origin, size, scale, eastNorth);
         this.origin = origin;
@@ -50,19 +55,20 @@ public class SubTileSetImpl implements TileSet{
         noTiles = metersOfTilesRequired.div(tileSizeM).ceil();
         pixelOffset = offsetInFirstTileM.div(scale).round();
         tileSizePx = tileSizeM.div(scale).round();
-        if (LOG.isDebugEnabled()){
-            LOG.debug("base tileset origin eastnorth {}", origEN);
-            LOG.debug("this tileset origin eastnorth {}", eastNorth);
-            LOG.debug("Offset to new origin m        {}", eastNorthDiff);
-            LOG.debug("Tile size in meters           {}", tileSizeM);
-            LOG.debug("offset from base tiles        {}", offsetTiles);
-            LOG.debug("Original scale                {}", origScale);
-            LOG.debug("Relative scale                {}", relativeScale);
-            LOG.debug("Offset in m within first tile {}", offsetInFirstTileM);
-            LOG.debug("Tile Set size in m            {}", sizeMeters);
-            LOG.debug("Number of tiles               {}", noTiles);
-            LOG.debug("Offset from first tile px     {}", pixelOffset);
-            LOG.debug("Tile size px                  {}", tileSizePx);
+        this.cacheManager=cacheManager;
+        if (LOG.isTraceEnabled()){
+            LOG.trace("base tileset origin eastnorth {}", origEN);
+            LOG.trace("this tileset origin eastnorth {}", eastNorth);
+            LOG.trace("Offset to new origin m        {}", eastNorthDiff);
+            LOG.trace("Tile size in meters           {}", tileSizeM);
+            LOG.trace("offset from base tiles        {}", offsetTiles);
+            LOG.trace("Original scale                {}", origScale);
+            LOG.trace("Relative scale                {}", relativeScale);
+            LOG.trace("Offset in m within first tile {}", offsetInFirstTileM);
+            LOG.trace("Tile Set size in m            {}", sizeMeters);
+            LOG.trace("Number of tiles               {}", noTiles);
+            LOG.trace("Offset from first tile px     {}", pixelOffset);
+            LOG.trace("Tile size px                  {}", tileSizePx);
         }
     }
 
@@ -93,7 +99,7 @@ public class SubTileSetImpl implements TileSet{
 
     @Override
     public Tile getTile(XY xy) {
-        return new ScaledTile(origin.getTile(xy), relativeScale);
+        return new ScaledTile(origin.getTile(xy), relativeScale, cacheManager);
     }
 
     @Override
@@ -108,7 +114,7 @@ public class SubTileSetImpl implements TileSet{
 
     @Override
     public TileSet sub(XY pixelSize, XYD scale, XYD eastNorth) {
-        return new SubTileSetImpl(this, pixelSize, scale, eastNorth);
+        return new SubTileSetImpl(this, pixelSize, scale, eastNorth, cacheManager);
     }
 
     @Override
@@ -118,9 +124,7 @@ public class SubTileSetImpl implements TileSet{
                                               getTilesetSizePx().y, 
                                               TYPE_INT_RGB);
         for (int x=0; x<noTilesInTilset().x; x++){
-            LOG.debug("x="+x);
             for (int y=0; y<noTilesInTilset().y; y++){
-                LOG.debug("y="+y);
 
                 XY xy = new XY(x, y);
                 XY tileNo = xy.add(firstTile);
@@ -138,11 +142,12 @@ public class SubTileSetImpl implements TileSet{
                     }
                 }else{
                     Graphics g = out.getGraphics();
-                    g.setColor(Color.blue);
+                    g.setColor(PALE_BLUE);
                     g.fillRect(offset.x, 
                                offset.y, 
                                getTilesetSizePx().x,
                                getTilesetSizePx().y);
+                    g.setColor(Color.BLUE);
                     char[] data = ("X="+x+", y="+y).toCharArray();
                     g.drawChars(data, 0, data.length, 5, 5);
                 }

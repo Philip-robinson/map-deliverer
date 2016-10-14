@@ -5,6 +5,8 @@
  */
 package uk.co.rpl.mapgen;
 
+import uk.co.rpl.mapgen.mapinstances.TileCacheManager;
+
 /**
  *
  * @author philip
@@ -16,4 +18,5 @@ public interface Config {
     XY getXY(String nameX, String nameY, XY def);
     XYD getXYD(String nameX, String nameY, XYD def);
     MapConfig[] maps();
+    TileCacheManager getCacheManager();
 }
