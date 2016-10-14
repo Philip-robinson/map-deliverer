@@ -7,8 +7,10 @@ import javax.imageio.stream.ImageOutputStream;
 import org.apache.log4j.BasicConfigurator;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
+import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.createMock;
 import static org.easymock.EasyMock.expect;
+import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.replay;
 import org.junit.Test;
 import static org.junit.Assert.*;
@@ -39,6 +41,7 @@ public class TFWMapTest {
     String TILE_FN="${tileid}.png";
     String DATA_FN="${tileid}.TFW";
     File dir = new File("/tmp/TEST-MAP-IMAGES/TFWMapTestImages/");
+    TileCacheManager cacheManager;
     public TFWMapTest() {
         BasicConfigurator.resetConfiguration();
         BasicConfigurator.configure();
@@ -61,7 +64,13 @@ public class TFWMapTest {
             andReturn(new XYD(25.0, 25.0)).anyTimes();
         replay(config);
 
-        inst = new TFWMap(config, BASE);
+        cacheManager = createMock(TileCacheManager.class);
+        cacheManager.accessed(anyObject());
+        expectLastCall().anyTimes();
+        cacheManager.partialCacheFlush();
+        expectLastCall().anyTimes();
+        replay(cacheManager);
+        inst = new TFWMap(config, BASE, cacheManager);
     }
     @Test
     public void testTileDir() {

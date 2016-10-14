@@ -16,7 +16,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.imageio.ImageIO;
 import org.slf4j.Logger;
-import static org.slf4j.LoggerFactory.getLogger;
 import uk.co.rpl.mapgen.Config;
 import uk.co.rpl.mapgen.MapConfig;
 import static uk.co.rpl.mapgen.MapConfig.SCALE_TYPE.FIXED;
@@ -25,6 +24,7 @@ import uk.co.rpl.mapgen.TileSet;
 import uk.co.rpl.mapgen.BaseTileSetImpl;
 import uk.co.rpl.mapgen.XY;
 import uk.co.rpl.mapgen.XYD;
+import static org.slf4j.LoggerFactory.getLogger;
 
 /**
  *
@@ -35,11 +35,13 @@ public class FixedMap implements MapConfig{
     private final Config config;
     private final String base;
     private BaseTileSetImpl all;
+    private final TileCacheManager cacheManager;
     
 
-    public FixedMap(Config config, String base){
+    public FixedMap(Config config, String base, TileCacheManager cacheManager){
         this.config = config;
         this.base = base;
+        this.cacheManager = cacheManager;
     }
     @Override
     public File tileDir() {
@@ -91,6 +93,7 @@ public class FixedMap implements MapConfig{
         return null;
     }
 
+    
     @Override
     public TileSet allTiles(){
         if (all != null) return all;
@@ -151,7 +154,8 @@ public class FixedMap implements MapConfig{
             }
         }
 
-        all= new BaseTileSetImpl(tileScale(), tileSize(), tile0Origin(), tiles);
+        all= new BaseTileSetImpl(tileScale(), tileSize(),
+                                 tile0Origin(), tiles, cacheManager);
         return all;
     }
 
@@ -162,23 +166,29 @@ public class FixedMap implements MapConfig{
     }
 
     public class FixedTile implements Tile{
-        private final File f;
+        private final File imageFile;
         private final XY pos;
+        private BufferedImage data;
         
         FixedTile(File f, int x, int y){
-            this.f = f;
+            this.imageFile = f;
             pos = new XY(x, y);
         }
         @Override
         public String getIdent() {
-            return f.getName();
+            return imageFile.getName();
         }
         @Override
         public BufferedImage imageData() throws TileException {
             try{
-                return ImageIO.read(f);
+                synchronized(imageFile){
+                    if (data == null) data = ImageIO.read(imageFile);
+                    return data;
+                }
             }catch (IOException e){
                 throw new TileException(e);
+            }finally{
+                cacheManager.accessed(this);
             }
         }
 
@@ -200,9 +210,15 @@ public class FixedMap implements MapConfig{
 
         @Override
         public String toString() {
-            return "FixedTile{" + "f=" + f + ", pos=" + pos + '}';
+            return "FixedTile{" + "f=" + imageFile + ", pos=" + pos + '}';
         }
-        
+
+        @Override
+        public void flushCache() {
+            synchronized(imageFile){
+                data = null;
+            }
+        }
     }
 
     @Override

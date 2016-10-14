@@ -6,12 +6,10 @@
 package uk.co.rpl.mapgen;
 
 import com.alibaba.fastjson.JSON;
-import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
 import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
-import java.awt.Color;
 import java.awt.image.BufferedImage;
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
@@ -42,7 +40,7 @@ import org.apache.log4j.PropertyConfigurator;
 import org.slf4j.Logger;
 import uk.co.rpl.mapgen.mapinstances.TileException;
 import static org.slf4j.LoggerFactory.getLogger;
-import static org.slf4j.LoggerFactory.getLogger;
+import uk.co.rpl.mapgen.mapinstances.TileCacheManager;
 
 /**
  *
@@ -57,20 +55,23 @@ public class MapGen {
     static int cacheExpirySeconds;
     static BlockingQueue<Runnable> requests = new LinkedBlockingQueue<>(50);
     static long ref = startTime.getTime()-1476312000000L;
+    static TileCacheManager cacheManager;
 
     static void reporter() {
         try {
             for (;;) {
                 Thread.sleep(10000);
                 if (LOG != null && LOG.isInfoEnabled()) {
+                    Runtime rt = Runtime.getRuntime();
                     LOG.info("Memory total {} Mb, "
                              + "or which {} Mb is free, "
                              + "max is {} Mb",
-                             (Runtime.getRuntime().totalMemory()/1000)/1000.0,
-                             (Runtime.getRuntime().freeMemory()/1000)/1000.0,
-                             (Runtime.getRuntime().maxMemory()/1000)/1000.0);
+                             (rt.totalMemory()/1000)/1000.0,
+                             (rt.freeMemory()/1000)/1000.0,
+                             (rt.maxMemory()/1000)/1000.0);
+                    LOG.info("Cache stats {} ", cacheManager);
                 }
-                Thread.sleep(3000000);
+                Thread.sleep(500000);
             }
         } catch (InterruptedException e) {
             LOG.error(e.getMessage(), e);
@@ -142,6 +143,7 @@ public class MapGen {
             }}).start();
         try {
             Config con = new ConfigImpl();
+            cacheManager = con.getCacheManager();
             final MapConfig[] maps = con.maps();
             LOG.info("Loaded " + Arrays.asList(maps));
 
@@ -152,7 +154,6 @@ public class MapGen {
                 new InetSocketAddress(port), 100);
             server.setExecutor(r->{
                 try{
-                    LOG.debug("request-received");
                     requests.put(r);
                 }catch (InterruptedException e){
                     LOG.error("Interrupted");
@@ -212,21 +213,14 @@ public class MapGen {
                 error.append(err);
             }
         };
-        String length = reqH.getFirst("content-length");
-        JSONObject data = new JSONObject();
-        if (length != null
-                    && length.length() != 0
-                    && !"0".equals(length)) {
-            data = getBody(length, httpEx);
-        }
         if (q != null) {
             NEWHS spec = new NEWHS();
             String[] params = q.split("&");
-            
             for (String pair : params) {
                 parseQuery(pair, spec, addErr);
             }
             spec.checkAllPresent(error, addErr);
+            
             if (error.length() == 0) {
                 XY size = spec.size();
                 XYD eastnorth = spec.eastnorth();
@@ -255,14 +249,26 @@ public class MapGen {
                         addErr.accept("Cannot find a suitable map");
                     } else {
                         try {
-                            TileSet ts = cur.allTiles();
-                            TileSet tsO = ts.sub(size, scaling, enTC);
-                            ByteArrayOutputStream baos
-                                    = new ByteArrayOutputStream();
-                            BufferedImage img = tsO.getImage();
-                            writeData(img, data, eastnorth,
-                                                         size, scaling);
-                            returnMap(baos, img, httpEx, start);
+                            byte[] imgData = cacheManager.getImage(etag);
+                            if (imgData == null){
+                                final TileSet ts = cur.allTiles();
+                                final TileSet tsO = ts.sub(size, scaling, enTC);
+                                BufferedImage img = tsO.getImage();
+                                ByteArrayOutputStream baos = 
+                                        new ByteArrayOutputStream();
+                                try (final ImageOutputStream io = 
+                                        ImageIO.createImageOutputStream(baos)) {
+                                    ImageIO.write(img, "png", io);
+                                    imgData = baos.toByteArray();
+                                }
+                                cacheManager.addImage(etag, imgData);
+                            }
+                            httpEx.getResponseHeaders().add(
+                                "Content-type", "image/png");
+                            httpEx.sendResponseHeaders(200, imgData.length);
+                            httpEx.getResponseBody().write(imgData);
+                            httpEx.close();
+                            LOG.info("Completed in {}ms", System.currentTimeMillis()-start);
                             return;
                         } catch (IOException | TileException te) {
                             addErr.accept(te.getMessage());
@@ -285,20 +291,6 @@ public class MapGen {
         LOG.info("Aborted in {}ms", System.currentTimeMillis()-start);
     }
 
-    private static void returnMap(ByteArrayOutputStream baos, BufferedImage img,
-                                  HttpExchange e, long start) throws IOException {
-        try (final ImageOutputStream io = ImageIO.createImageOutputStream(baos)) {
-            ImageIO.write(img, "png", io);
-            byte[] res = baos.toByteArray();
-            e.getResponseHeaders().add(
-                "Content-type", "image/png");
-            e.sendResponseHeaders(200, res.length);
-            e.getResponseBody().write(res);
-            e.close();
-            LOG.info("Completed in {}ms", System.currentTimeMillis()-start);
-            return;
-        }
-    }
 
     private static MapConfig getBestMap(MapConfig[] maps,
                                         XYD enTC, XYD scaling, XY size 
@@ -367,34 +359,6 @@ public class MapGen {
             addErr.accept("Failed to process " + pair);
         }
     }
-
-    private static void writeData(BufferedImage img, JSONObject data,
-                                  XYD eastnorth, XY size, XYD scaling) {
-        JSONArray pathNames = data.getJSONArray("paths");
-        JSONArray pointNames = data.getJSONArray("paths");
-        if (pathNames != null) {
-            XY last = null;
-            for (int i = 0; i < pathNames.size(); i++) {
-                String name = pathNames.getString(i);
-                JSONArray path = data.getJSONArray(name);
-                for (int j = 0; j < path.size(); i++) {
-                    JSONArray pair = path.getJSONArray(j);
-                    XY thisO = getAsPxl(pair, eastnorth, scaling);
-                    if (last != null) {
-                        img.getGraphics().setColor(Color.blue);
-                        img.getGraphics().drawLine(last.x, last.y, thisO.x, thisO.y);
-                    }
-                    last = thisO;
-                }
-            }
-        }
-    }
-
-    private static XY getAsPxl(JSONArray pair, XYD eastnorth, XYD scaling) {
-        XYD xyd = new XYD(pair.getLongValue(0), pair.getLongValue(1));
-        return xyd.sub(eastnorth).div(scaling).xy();
-    }
-
     private static class NEWHS {
 
         Double north = null;
@@ -440,6 +404,7 @@ public class MapGen {
             return eastnorth().sub(scaling().mul(
                 size().xyd()).divide(2));
         }
+        @Override
         public String toString(){
             double sc = scale==null?1:scale;
             return ((long)(north/sc/height))+":"+((long)(east/sc/width))+":"+

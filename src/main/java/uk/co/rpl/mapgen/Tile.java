@@ -22,5 +22,7 @@ public interface Tile {
     XYD scale() throws TileException;
     XYD origin() throws TileException;
     XY size() throws TileException;
+
+    public void flushCache();
     
 }

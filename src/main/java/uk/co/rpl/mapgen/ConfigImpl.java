@@ -9,6 +9,9 @@ import org.slf4j.Logger;
 import static org.slf4j.LoggerFactory.getLogger;
 import uk.co.rpl.mapgen.mapinstances.FixedMap;
 import uk.co.rpl.mapgen.mapinstances.TFWMap;
+import uk.co.rpl.mapgen.mapinstances.TileCacheManager;
+import uk.co.rpl.mapgen.mapinstances.TileException;
+import static org.slf4j.LoggerFactory.getLogger;
 
 /**
  *
@@ -20,6 +23,7 @@ public class ConfigImpl implements Config{
     private final Properties prop;
     private MapConfig[] maps;
     private final Object mapsLock = new Object();
+    private final TileCacheManager cacheManager;
 
     public ConfigImpl(){
         this.prop = new Properties();
@@ -45,6 +49,7 @@ public class ConfigImpl implements Config{
         for (Object key: new TreeSet(prop.keySet())){
             LOG.info(String.format(" data %-20s => %s", key, prop.get(key)));
         }
+        cacheManager = new TileCacheManager(this);
     }
     
     @Override
@@ -105,6 +110,15 @@ public class ConfigImpl implements Config{
                 final List<MapConfig> clist = new ArrayList<>();
                 for(String mapId: get("maps").split("\\s*,\\s*")){
                     final MapConfig mc = getMapConfig(mapId);
+                    new Thread(()->{
+                        try{
+                            mc.allTiles();
+                            LOG.info("Map {} loaded", mapId);
+                        } catch (TileException ex) {
+                            LOG.error("Problem starting mapId={}: {}", 
+                                      mapId, ex.getMessage(), ex);
+                        }
+                        }).start();
                     if (mc != null) clist.add(mc);
                 }
                 maps=clist.toArray(new MapConfig[clist.size()]);
@@ -116,10 +130,14 @@ public class ConfigImpl implements Config{
     private MapConfig getMapConfig(String mapId) {
         String type = get(mapId+".scale-type");
         switch(type){
-            case "FIXED": return new FixedMap(this, mapId);
-            case "TFW": return new TFWMap(this, mapId);
+            case "FIXED": return new FixedMap(this, mapId, cacheManager);
+            case "TFW": return new TFWMap(this, mapId, cacheManager);
             default: return null;
         }
+    }
+
+    public TileCacheManager getCacheManager() {
+        return cacheManager;
     }
     
 }
