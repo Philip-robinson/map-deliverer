@@ -32,6 +32,7 @@ import java.util.TimeZone;
 import java.util.TreeMap;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.DoubleSupplier;
 import javax.imageio.ImageIO;
@@ -53,25 +54,30 @@ public class MapGen {
     static Map<Double, Map<Double, File>> map = new TreeMap<>();
     static Date startTime = new Date();
     static int cacheExpirySeconds;
-    static BlockingQueue<Runnable> requests = new LinkedBlockingQueue<>(50);
+    static BlockingQueue<Req> requests = new LinkedBlockingQueue<>(50);
     static long ref = startTime.getTime()-1476312000000L;
     static TileCacheManager cacheManager;
+    static AtomicInteger runningThreads = new AtomicInteger();
+
+    static int NUMBER_OF_THREADS = 100; 
 
     static void reporter() {
         try {
             for (;;) {
-                Thread.sleep(10000);
+                Thread.sleep(5000);
                 if (LOG != null && LOG.isInfoEnabled()) {
                     Runtime rt = Runtime.getRuntime();
                     LOG.info("Memory total {} Mb, "
                              + "or which {} Mb is free, "
-                             + "max is {} Mb",
+                             + "max is {} Mb queue length is {}, running entries {}",
                              (rt.totalMemory()/1000)/1000.0,
                              (rt.freeMemory()/1000)/1000.0,
-                             (rt.maxMemory()/1000)/1000.0);
+                             (rt.maxMemory()/1000)/1000.0,
+                             requests.size(),
+                             runningThreads.get());
                     LOG.info("Cache stats {} ", cacheManager);
                 }
-                Thread.sleep(500000);
+                Thread.sleep(5000);
             }
         } catch (InterruptedException e) {
             LOG.error(e.getMessage(), e);
@@ -132,14 +138,24 @@ public class MapGen {
         PropertyConfigurator.configure(l4jprops);
         LOG = getLogger(MapGen.class);
         new Thread(MapGen::reporter).start();
-        for (int i=0; i<100; i++) new Thread(()->{
-            try{
-                for (;;){
-                    LOG.debug("LOOP");
-                    requests.take().run();
+        for (int i=0; i<NUMBER_OF_THREADS; i++) new Thread(()->{
+            for (;;){
+                try{
+                    Req req = requests.take();
+                    runningThreads.addAndGet(1);
+                    long start=System.currentTimeMillis();
+                    req.run.run();
+                    long fin = System.currentTimeMillis();
+                    runningThreads.addAndGet(-1);
+                    LOG.info("Completed: queued {}ms, ran for {}ms",
+                             start-req.startTime,
+                             fin-req.startTime);
+                }catch(InterruptedException e){
+                    LOG.error("interrupted");
+                    return;
+                }catch(Throwable e1){
+                    LOG.error(e1.getMessage(), e1);
                 }
-            }catch(InterruptedException e){
-                LOG.error("interrupted");
             }}).start();
         try {
             Config con = new ConfigImpl();
@@ -154,7 +170,7 @@ public class MapGen {
                 new InetSocketAddress(port), 100);
             server.setExecutor(r->{
                 try{
-                    requests.put(r);
+                    requests.put(new Req(r));
                 }catch (InterruptedException e){
                     LOG.error("Interrupted");
                 }});
@@ -411,4 +427,12 @@ public class MapGen {
                    width+":"+height+":"+scale;
         }
     }
+    static class Req{
+        Runnable run;
+        long startTime;
+        Req(Runnable run){
+            this.run = run;
+            startTime = System.currentTimeMillis();
+        }
+    } 
 }
