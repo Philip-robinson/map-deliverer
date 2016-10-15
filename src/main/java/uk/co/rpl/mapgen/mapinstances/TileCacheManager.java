@@ -101,7 +101,7 @@ public class TileCacheManager {
             imageCache.remove(key);
             imageCache.put(key, data);
             if (imageCache.size()>maxImageCount || memoryLimitExceeded()){
-                LOG.info("Purging image cache size = {} mem limit ", imageCache.size(), memoryLimitExceeded());
+                LOG.info("Purging image cache size = {} mem limit {}", imageCache.size(), memoryLimitExceeded());
                 new Thread(()->partialCacheFlush()).start();
             }
         }
