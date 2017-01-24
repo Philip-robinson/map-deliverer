@@ -11,6 +11,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.TreeMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -169,6 +170,35 @@ public class FixedMap implements MapConfig{
         private final File imageFile;
         private final XY pos;
         private BufferedImage data;
+
+        @Override
+        public int hashCode() {
+            int hash = 7;
+            hash = 59 * hash + Objects.hashCode(this.imageFile);
+            hash = 59 * hash + Objects.hashCode(this.pos);
+            return hash;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) {
+                return true;
+            }
+            if (obj == null) {
+                return false;
+            }
+            if (getClass() != obj.getClass()) {
+                return false;
+            }
+            final FixedTile other = (FixedTile) obj;
+            if (!Objects.equals(this.imageFile, other.imageFile)) {
+                return false;
+            }
+            if (!Objects.equals(this.pos, other.pos)) {
+                return false;
+            }
+            return true;
+        }
         
         FixedTile(File f, int x, int y){
             this.imageFile = f;

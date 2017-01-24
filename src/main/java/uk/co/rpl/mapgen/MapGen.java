@@ -52,7 +52,7 @@ public class MapGen {
 
     static Logger LOG;
     static Map<Double, Map<Double, File>> map = new TreeMap<>();
-    static Date startTime = new Date();
+    static final Date startTime = new Date();
     static int cacheExpirySeconds;
     static BlockingQueue<Req> requests = new LinkedBlockingQueue<>(50);
     static long ref = startTime.getTime()-1476312000000L;
@@ -123,7 +123,6 @@ public class MapGen {
 
     public static void main(String[] argv) throws IOException {
         
-        startTime = Calendar.getInstance(TimeZone.getTimeZone("GMT")).getTime();
         Properties l4jprops = new Properties();
         l4jprops.load(MapGen.class.getResourceAsStream("/log4j.properties"));
         System.out.println("/log4j.properties loaded");
@@ -375,7 +374,7 @@ public class MapGen {
             addErr.accept("Failed to process " + pair);
         }
     }
-    private static class NEWHS {
+    static class NEWHS {
 
         Double north = null;
         Double east = null;
@@ -423,8 +422,8 @@ public class MapGen {
         @Override
         public String toString(){
             double sc = scale==null?1:scale;
-            return ((long)(north/sc/height))+":"+((long)(east/sc/width))+":"+
-                   width+":"+height+":"+scale;
+            return "N/E"+north+"/"+east+
+                   ": w "+ width+": h "+height+": scale "+scale;
         }
     }
     static class Req{
@@ -435,4 +434,5 @@ public class MapGen {
             startTime = System.currentTimeMillis();
         }
     } 
+    
 }

@@ -7,6 +7,7 @@ package uk.co.rpl.mapgen;
 
 import java.awt.image.BufferedImage;
 import static java.awt.image.BufferedImage.TYPE_INT_BGR;
+import java.util.Objects;
 import org.slf4j.Logger;
 import uk.co.rpl.mapgen.mapinstances.TileCacheManager;
 import uk.co.rpl.mapgen.mapinstances.TileException;
@@ -26,6 +27,35 @@ public class ScaledTile implements Tile {
         oTile = tile;
         this.relScale = relScale;
         this.cacheManager = cacheManager;
+    }
+
+    @Override
+    public int hashCode() {
+        int hash = 3;
+        hash = 43 * hash + Objects.hashCode(this.oTile);
+        hash = 43 * hash + Objects.hashCode(this.relScale);
+        return hash;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) {
+            return true;
+        }
+        if (obj == null) {
+            return false;
+        }
+        if (getClass() != obj.getClass()) {
+            return false;
+        }
+        final ScaledTile other = (ScaledTile) obj;
+        if (!Objects.equals(this.oTile, other.oTile)) {
+            return false;
+        }
+        if (!Objects.equals(this.relScale, other.relScale)) {
+            return false;
+        }
+        return true;
     }
 
     @Override
