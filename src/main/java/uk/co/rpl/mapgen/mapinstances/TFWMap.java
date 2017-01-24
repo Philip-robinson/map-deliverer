@@ -11,6 +11,7 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.Map;
+import java.util.Objects;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.regex.Matcher;
@@ -217,6 +218,47 @@ public class TFWMap implements MapConfig{
                 LOG.error("Problem reading tile data "+ex.getMessage(), ex);
                 throw new TileException(ex);
             }
+        }
+
+        @Override
+        public int hashCode() {
+            int hash = 5;
+            hash = 47 * hash + Objects.hashCode(this.tileFile);
+            hash = 47 * hash + Objects.hashCode(this.ident);
+            hash = 47 * hash + Objects.hashCode(this.scale);
+            hash = 47 * hash + Objects.hashCode(this.eastNorth);
+            hash = 47 * hash + Objects.hashCode(this.size);
+            return hash;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj) {
+                return true;
+            }
+            if (obj == null) {
+                return false;
+            }
+            if (getClass() != obj.getClass()) {
+                return false;
+            }
+            final TFWTile other = (TFWTile) obj;
+            if (!Objects.equals(this.ident, other.ident)) {
+                return false;
+            }
+            if (!Objects.equals(this.tileFile, other.tileFile)) {
+                return false;
+            }
+            if (!Objects.equals(this.scale, other.scale)) {
+                return false;
+            }
+            if (!Objects.equals(this.eastNorth, other.eastNorth)) {
+                return false;
+            }
+            if (!Objects.equals(this.size, other.size)) {
+                return false;
+            }
+            return true;
         }
 
         @Override
