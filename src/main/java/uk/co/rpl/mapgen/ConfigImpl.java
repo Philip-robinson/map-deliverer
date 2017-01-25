@@ -6,7 +6,6 @@ import java.util.List;
 import java.util.Properties;
 import java.util.TreeSet;
 import org.slf4j.Logger;
-import static org.slf4j.LoggerFactory.getLogger;
 import uk.co.rpl.mapgen.mapinstances.FixedMap;
 import uk.co.rpl.mapgen.mapinstances.TFWMap;
 import uk.co.rpl.mapgen.mapinstances.TileCacheManager;

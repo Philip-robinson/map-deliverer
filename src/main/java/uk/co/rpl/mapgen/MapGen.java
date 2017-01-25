@@ -26,6 +26,7 @@ import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.TimeZone;
@@ -58,18 +59,19 @@ public class MapGen {
     static long ref = startTime.getTime()-1476312000000L;
     static TileCacheManager cacheManager;
     static AtomicInteger runningThreads = new AtomicInteger();
+    static Config con;
 
-    static int NUMBER_OF_THREADS = 100; 
 
     static void reporter() {
+        long sleepTime = con.getInt("init.reporter-period", 60000);
         try {
             for (;;) {
-                Thread.sleep(5000);
+                Thread.sleep(sleepTime);
                 if (LOG != null && LOG.isInfoEnabled()) {
                     Runtime rt = Runtime.getRuntime();
                     LOG.info("Memory total {} Mb, "
-                             + "or which {} Mb is free, "
-                             + "max is {} Mb queue length is {}, running entries {}",
+                             + "free {} Mb, "
+                             + "max {} Mb, queue total {}, running {}",
                              (rt.totalMemory()/1000)/1000.0,
                              (rt.freeMemory()/1000)/1000.0,
                              (rt.maxMemory()/1000)/1000.0,
@@ -77,7 +79,6 @@ public class MapGen {
                              runningThreads.get());
                     LOG.info("Cache stats {} ", cacheManager);
                 }
-                Thread.sleep(5000);
             }
         } catch (InterruptedException e) {
             LOG.error(e.getMessage(), e);
@@ -136,7 +137,34 @@ public class MapGen {
         }
         PropertyConfigurator.configure(l4jprops);
         LOG = getLogger(MapGen.class);
-        new Thread(MapGen::reporter).start();
+        
+        try {
+            con = new ConfigImpl();
+            cacheManager = con.getCacheManager();
+            final MapConfig[] maps = con.maps();
+            LOG.info("Loaded " + Arrays.asList(maps));
+
+            cacheExpirySeconds = con.getInt("cache-age", 86400);
+
+            int port = con.getInt("port", 7664);
+            HttpServer server = HttpServer.create(
+                new InetSocketAddress(port), 100);
+            server.setExecutor(r->{
+                try{
+                    requests.put(new Req(r));
+                }catch (InterruptedException e){
+                    LOG.error("Interrupted");
+                }});
+            server.createContext("/", e -> status(e));
+            server.createContext("/status", e -> status(e));
+            server.createContext("/map", e -> listener(e, maps));
+            server.start();
+            LOG.info("Server started on port {}", port);
+            System.out.println("Server started on port " + port);
+        } catch (IOException ex) {
+            LOG.error(ex.getMessage(), ex);
+        }
+        int NUMBER_OF_THREADS = con.getInt("init.threads", 100);
         for (int i=0; i<NUMBER_OF_THREADS; i++) new Thread(()->{
             for (;;){
                 try{
@@ -155,33 +183,31 @@ public class MapGen {
                 }catch(Throwable e1){
                     LOG.error(e1.getMessage(), e1);
                 }
-            }}).start();
-        try {
-            Config con = new ConfigImpl();
-            cacheManager = con.getCacheManager();
-            final MapConfig[] maps = con.maps();
-            LOG.info("Loaded " + Arrays.asList(maps));
-
-            cacheExpirySeconds = con.getInt("cache-age", 86400);
-
-            int port = con.getInt("port", 7664);
-            HttpServer server = HttpServer.create(
-                new InetSocketAddress(port), 100);
-            server.setExecutor(r->{
-                try{
-                    requests.put(new Req(r));
-                }catch (InterruptedException e){
-                    LOG.error("Interrupted");
-                }});
-            server.createContext("/", e -> listener(e, maps));
-            server.start();
-            LOG.info("Server started on port {}", port);
-            System.out.println("Server started on port " + port);
-        } catch (IOException ex) {
-            LOG.error(ex.getMessage(), ex);
-        }
+            }
+        }).start();
+        new Thread(MapGen::reporter).start();
     }
 
+    private static void status(HttpExchange httpEx) 
+        throws IOException, NumberFormatException {
+        Headers respH = httpEx.getResponseHeaders();
+        respH.add("Content-type", "application/json");
+        LOG.warn("Sending status");
+        Map<String, String> data = new LinkedHashMap<>();
+        data.put("STATUS", "UP");
+        data.put("Application", con.get("app.name")+": "+con.get("app.version"));
+        Runtime rt = Runtime.getRuntime();
+        data.put("TotalMemoryMb", ""+((rt.totalMemory()/1000)/1000.0));
+        data.put("FreeMemoryMb", ""+((rt.freeMemory()/1000)/1000.0));
+        data.put("MaxMemoryMb", ""+((rt.maxMemory()/1000)/1000.0));
+        data.put("QueuedRequests",""+requests.size());
+        data.put("RunningThreads", ""+runningThreads.get());
+        data.put("CacheStats", cacheManager.toString());
+        byte[] resp = JSON.toJSONString(data).getBytes();
+        httpEx.sendResponseHeaders(200, resp.length);
+        httpEx.getResponseBody().write(resp);
+        httpEx.close();
+    }
     private static void listener(HttpExchange httpEx, MapConfig[] maps) 
         throws IOException, NumberFormatException {
         long start = System.currentTimeMillis();
